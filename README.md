@@ -108,16 +108,31 @@ cd frontend && npm run build     # build produksi ke frontend/dist
 
 Kasus yang bisa ditunjukkan: struk ditolak lalu diajukan ulang dan disetujui, duplikat nomor transaksi, melewati masa klaim, tanggal di masa depan, poin ditahan (hold), serta redeem di semua status.
 
-### Akun demo
+### Akun dari seeder (email & kata sandi)
 
-Kata sandi semua akun demo: `Demo-Alpaka-2026`.
+> Hanya untuk development/demo. **Ganti semua kata sandi ini (dan jangan jalankan `seed:demo`) di production.**
 
-| Peran | Login |
-|---|---|
-| Member (riwayat terlengkap) | `demo@alpaka.local` — saldo: total 275, ditahan 60, tersedia 215 |
-| Member lain | `sari.wulandari@example.com`, `budi.santoso@example.com`, `rian.pratama@example.com`, `maya.anggraini@example.com`, `agus.setiawan@example.com`, `nina.kusuma@example.com` |
-| Member dengan no. HP saja | `6281234500004` (Dewi) |
-| Admin | `admin@alpaka.local` (kata sandi dari `ADMIN_PASSWORD` di `.env`) atau `reviewer@alpaka.local` / `Demo-Alpaka-2026`, login di `/admin/login` |
+**Admin** — login di `/admin/login` (http://localhost:9722/admin/login)
+
+| Nama | Email | Kata sandi | Dibuat oleh |
+|---|---|---|---|
+| Administrator Alpaka | `admin@alpaka.local` | `Admin-Alpaka-2026` | seeder dasar `03_admin` — nilai dari `ADMIN_EMAIL` / `ADMIN_PASSWORD` di `.env` (bila `.env` diubah sebelum seeding pertama, pakai nilai di `.env`) |
+| Reviewer Alpaka | `reviewer@alpaka.local` | `Demo-Alpaka-2026` | `seed:demo` |
+
+**Member** — login di `/masuk` (http://localhost:9722/masuk). Kata sandi semua member demo: `Demo-Alpaka-2026`
+
+| Nama | Login (email / no. HP) | Keterangan |
+|---|---|---|
+| Member Demo | `demo@alpaka.local` | Akun utama untuk presentasi: riwayat terlengkap. Saldo: total 275, ditahan 60, tersedia 215 |
+| Sari Wulandari | `sari.wulandari@example.com` | |
+| Budi Santoso | `budi.santoso@example.com` | |
+| Dewi Lestari | `6281234500004` (no. HP, tanpa email) | Login pakai nomor HP; format `0812...` atau `+62812...` juga diterima |
+| Rian Pratama | `rian.pratama@example.com` | Poin 250 sedang ditahan untuk redeem |
+| Maya Anggraini | `maya.anggraini@example.com` | |
+| Agus Setiawan | `agus.setiawan@example.com` | |
+| Nina Kusuma | `nina.kusuma@example.com` | Member baru |
+
+Akun member baru dapat dibuat lewat halaman registrasi (`/daftar`); admin baru lewat menu **Kelola Admin**.
 
 ### Catatan penting saat demo
 
