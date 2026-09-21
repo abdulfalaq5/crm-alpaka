@@ -44,7 +44,7 @@ export default function RedeemQueue() {
         onRow={(r) => ({ onClick: () => navigate(`/admin/redeem/${r.id}`), className: 'clickable-row' })}
         columns={[
           { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime, responsive: ['md'] },
-          { title: 'Member', render: (_, r) => <>{r.member_nama}<div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{r.member_email}</div></> },
+          { title: 'Member', render: (_, r) => <>{r.member_nama}<div className="cell-sub">{r.member_email}</div></> },
           { title: 'Reward', dataIndex: 'reward_nama' },
           { title: 'Poin', dataIndex: 'jumlah_poin', render: num, align: 'right', responsive: ['sm'] },
           { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },

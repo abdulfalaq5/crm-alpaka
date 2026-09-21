@@ -48,7 +48,13 @@ const config = {
   },
   // WhatsApp lewat gateway HTTP generik (OI-08). Nonaktif bila WA_API_URL kosong.
   whatsapp: { url: process.env.WA_API_URL, token: process.env.WA_API_TOKEN },
+  // Swagger UI (/api/docs): default aktif di development, nonaktif di production kecuali SWAGGER_ENABLED=true.
+  swaggerEnabled: process.env.SWAGGER_ENABLED ? process.env.SWAGGER_ENABLED === 'true' : (process.env.NODE_ENV || 'development') !== 'production',
   logDir: path.resolve(__dirname, '..', process.env.LOG_DIR || 'logs'),
+  // Batas percobaan login per IP per 15 menit (selain penguncian per akun). Naikkan hanya untuk stack uji.
+  // Batas permintaan API per IP per menit (semua endpoint). Kantor/NAT dengan banyak pengguna satu IP perlu nilai lebih besar.
+  rateLimitPerMinute: int(process.env.RATE_LIMIT_PER_MIN, 300),
+  loginRateLimit: int(process.env.LOGIN_RATE_LIMIT, 30),
   maxLoginAttempts: 5,
   lockMinutes: 15,
 };

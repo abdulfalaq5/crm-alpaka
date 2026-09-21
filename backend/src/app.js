@@ -9,6 +9,8 @@ const member = require('./routes/member');
 const admin = require('./routes/admin');
 const pub = require('./routes/public');
 const { requestLog } = require('./middleware/requestLog');
+const swaggerUi = require('swagger-ui-express');
+const { buildSpec } = require('./docs/openapi');
 
 function createApp() {
   const app = express();
@@ -21,6 +23,20 @@ function createApp() {
     app.use((req, res, next) => (req.secure ? next() : res.redirect(301, `https://${req.headers.host}${req.originalUrl}`)));
   }
 
+  // Dokumentasi API (Swagger UI). Dipasang SEBELUM helmet karena UI membutuhkan skrip/gaya inline
+  // yang diblokir CSP bawaan; CSP ketat tetap berlaku untuk seluruh endpoint API lain.
+  if (config.swaggerEnabled) {
+    app.get('/api/docs.json', (req, res) => res.json(buildSpec()));
+    app.use(
+      '/api/docs',
+      swaggerUi.serve,
+      swaggerUi.setup(buildSpec(), {
+        customSiteTitle: 'Alpaka Loyalty API',
+        swaggerOptions: { persistAuthorization: true, tagsSorter: 'alpha', operationsSorter: 'alpha', docExpansion: 'list' },
+      })
+    );
+  }
+
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: config.corsOrigins, exposedHeaders: ['X-Refresh-Token'] }));
   app.use(requestLog);
@@ -29,7 +45,7 @@ function createApp() {
   app.use(
     rateLimit({
       windowMs: 60 * 1000,
-      limit: 300,
+      limit: config.rateLimitPerMinute,
       standardHeaders: true,
       legacyHeaders: false,
       message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Terlalu banyak permintaan. Coba lagi sebentar lagi.' } },

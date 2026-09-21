@@ -46,7 +46,7 @@ export default function ReceiptList() {
           { title: 'No. transaksi', dataIndex: 'nomor_transaksi' },
           { title: 'Nominal', dataIndex: 'nominal', render: rupiah, align: 'right' },
           { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },
-          { title: 'Poin', dataIndex: 'poin_diperoleh', align: 'right', render: (p) => (p ? `+${num(p)}` : '-') },
+          { title: 'Poin', dataIndex: 'poin_diperoleh', align: 'right', render: (p) => (p ? `+${num(p)}` : '-'), responsive: ['sm'] },
         ]}
       />
     </>

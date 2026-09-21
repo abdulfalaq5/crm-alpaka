@@ -62,7 +62,7 @@ export default function Rewards() {
           { title: '', render: (_, r) => <Button size="small" onClick={() => open(r)}>Ubah</Button> },
         ]}
       />
-      <Modal open={!!editing} title={editing?.id ? 'Ubah Reward' : 'Tambah Reward'} onCancel={() => setEditing(null)} onOk={() => form.submit()} confirmLoading={saving} okText="Simpan" cancelText="Batal" destroyOnClose forceRender>
+      <Modal open={!!editing} title={editing?.id ? 'Ubah Reward' : 'Tambah Reward'} onCancel={() => setEditing(null)} onOk={() => form.submit()} confirmLoading={saving} okText="Simpan" cancelText="Batal" destroyOnHidden forceRender>
         <Form form={form} layout="vertical" onFinish={save} requiredMark={false}>
           <Form.Item name="nama" label="Nama reward" rules={[{ required: true, whitespace: true, message: 'Nama wajib diisi' }]}><Input maxLength={120} /></Form.Item>
           <Form.Item name="deskripsi" label="Deskripsi"><Input.TextArea rows={3} maxLength={500} /></Form.Item>

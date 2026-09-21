@@ -107,14 +107,18 @@ export default function Redeem() {
                 pagination={{ current: page, pageSize: 10, total: history.data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
                 columns={[
                   { title: 'Tanggal', dataIndex: 'created_at', render: fmtDateTime, responsive: ['md'] },
-                  { title: 'Reward', dataIndex: 'reward_nama' },
+                  {
+                    title: 'Reward',
+                    render: (_, r) => (
+                      <>
+                        {r.reward_nama}
+                        {r.status === 'selesai' && <div className="cell-sub">{r.detail_pemberian || 'Reward diberikan.'}</div>}
+                        {r.status === 'ditolak' && <div className="cell-sub">Alasan: {r.alasan_penolakan}</div>}
+                      </>
+                    ),
+                  },
                   { title: 'Poin', dataIndex: 'jumlah_poin', render: num, align: 'right', responsive: ['sm'] },
                   { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },
-                  {
-                    title: 'Keterangan',
-                    render: (_, r) =>
-                      r.status === 'selesai' ? (r.detail_pemberian || 'Reward diberikan.') : r.status === 'ditolak' ? `Alasan: ${r.alasan_penolakan}` : '',
-                  },
                   {
                     title: '',
                     render: (_, r) =>

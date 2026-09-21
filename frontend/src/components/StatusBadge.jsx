@@ -13,6 +13,7 @@ export default function StatusBadge({ status, label }) {
   const color = COLORS[s.color];
   return (
     <span
+      className="status-badge"
       style={{
         display: 'inline-block',
         padding: '1px 8px',
@@ -21,7 +22,6 @@ export default function StatusBadge({ status, label }) {
         borderRadius: 4,
         fontSize: 12,
         fontWeight: 600,
-        whiteSpace: 'nowrap',
       }}
     >
       {label || s.label}

@@ -40,12 +40,12 @@ export default function Members() {
         locale={{ emptyText: <EmptyState text="Tidak ada member" /> }}
         pagination={{ current: page, pageSize: 15, total: data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
         columns={[
-          { title: 'Member', render: (_, r) => <>{r.nama}<div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{r.email || r.no_hp}</div></> },
+          { title: 'Member', render: (_, r) => <>{r.nama}<div className="cell-sub">{r.email || r.no_hp}</div></> },
           { title: 'Bergabung', dataIndex: 'created_at', render: fmtDate, responsive: ['md'] },
           { title: 'Struk', dataIndex: 'jumlah_struk', align: 'right', responsive: ['md'] },
           { title: 'Total', dataIndex: 'total', render: num, align: 'right', responsive: ['sm'] },
           { title: 'Tersedia', dataIndex: 'tersedia', render: num, align: 'right' },
-          { title: 'Status', dataIndex: 'status_akun', render: (s) => <StatusBadge status={s === 'aktif' ? 'disetujui' : 'dibatalkan'} label={s === 'aktif' ? 'Aktif' : 'Nonaktif'} /> },
+          { title: 'Status', dataIndex: 'status_akun', render: (s) => <StatusBadge status={s === 'aktif' ? 'disetujui' : 'dibatalkan'} label={s === 'aktif' ? 'Aktif' : 'Nonaktif'} />, responsive: ['sm'] },
           {
             title: '',
             render: (_, r) =>

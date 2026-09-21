@@ -14,6 +14,16 @@ Rencana lengkap: [BACKEND.md](BACKEND.md) dan [FRONTEND.md](FRONTEND.md).
 - **Admin Panel** (`/admin`) — antrean & review struk (setujui / tolak + alasan), antrean & review redeem (catat detail pemberian), pengaturan auto-approve, pengaturan program (konversi poin, masa klaim, batas file, channel), manajemen reward, log audit (read-only).
 - **Aturan yang ditegakkan di server** — RBAC member/admin, validasi otomatis (kelengkapan, duplikat, tanggal, nominal), poin idempotent (unique constraint), perubahan saldo dalam transaksi atomik dengan row lock, log audit immutable (trigger database), file bukti tidak publik (hanya pemilik & admin), rate limit + penguncian akun setelah 5 kali gagal login, sesi berakhir otomatis bila tidak aktif.
 
+## Dokumentasi API (Swagger)
+
+Setelah backend berjalan buka **http://localhost:9721/api/docs** (juga lewat frontend: http://localhost:9722/api/docs). Spesifikasi mentah OpenAPI 3: `/api/docs.json`.
+
+1. Panggil `POST /auth/login` (member) atau `POST /auth/admin/login` (admin) → salin `token`.
+2. Klik **Authorize**, tempel token (tanpa kata "Bearer"), lalu coba endpoint lewat **Try it out**.
+
+- Spesifikasi ada di `backend/src/docs/openapi.js` (55 endpoint, dikelompokkan per Member/Admin). Bila menambah/mengubah route, perbarui file itu — `npm test` akan gagal bila ada route yang belum terdokumentasi atau dokumentasi yang sudah usang.
+- Default **aktif di development, nonaktif di production**. Ubah dengan `SWAGGER_ENABLED=true|false` di `.env`.
+
 ## Menjalankan
 
 Prasyarat: Node.js 20+ dan PostgreSQL.
@@ -27,6 +37,7 @@ cd frontend && npm install && npm run dev    # buka http://localhost:9722
 
 - Saat start, backend menerapkan migrasi yang belum berjalan (`backend/src/db/migrations/*.sql`, tercatat di tabel `schema_migrations`) lalu menjalankan seeder data referensi (`backend/src/db/seeders/`). Keduanya idempotent dan tidak menimpa pengaturan yang sudah diubah admin.
 - Frontend memproksikan `/api` ke backend (`BACKEND_PORT`), jadi tidak ada konfigurasi CORS tambahan saat development.
+- **Halaman putih di browser setelah `npm install`/upgrade?** Dev server yang masih berjalan memakai versi lama. Hentikan lalu jalankan ulang `npm run dev`, dan hard-refresh browser (Ctrl+Shift+R).
 - **Catatan `.env`:** karakter `#` di nilai tanpa tanda kutip dianggap komentar. Beri tanda kutip bila password mengandung `#`.
 
 ## Perintah
@@ -42,14 +53,24 @@ cd frontend && npm run build     # build produksi ke frontend/dist
 
 ## Pengujian
 
-- `cd backend && npm test` — unit test logika (poin, validasi, auto-approve). Tidak butuh database.
-- **E2E API** (`backend/tests/e2e/api.e2e.mjs`, ±65 skenario: registrasi, RBAC, validasi, duplikat, approve paralel, redeem paralel, saldo, notifikasi, audit). Jalankan di **database sementara**, bukan database yang berisi data Anda:
+- `cd backend && npm test` — unit test logika (poin, saldo, validasi, auto-approve) + kecocokan dokumentasi Swagger dengan route. Tidak butuh database.
+- **Jalankan tes e2e HANYA di stack sementara**, tidak pernah di sistem utama (9721/9722): tes membuat, menyetujui, dan menolak data. Skrip menolak berjalan tanpa target eksplisit dan menolak port sistem utama.
+
   ```bash
+  # 1) database & backend sementara (port 9731), email nonaktif agar inbox tidak terbanjiri
   createdb db_crm_alpaka_test
-  cd backend && DB_NAME=db_crm_alpaka_test BACKEND_PORT=9731 MAIL_HOST= UPLOAD_DIR=uploads_test npm start &
+  cd backend && export MAIL_HOST= LOGIN_RATE_LIMIT=1000 RATE_LIMIT_PER_MIN=5000 DB_NAME=db_crm_alpaka_test UPLOAD_DIR=uploads_test LOG_DIR=logs_test BACKEND_PORT=9731
+  npm run db:setup && npm run seed:demo && npm start &
+
+  # 2) E2E API (~115 skenario). Untuk tes API pakai database KOSONG (tanpa seed:demo)
   API_URL=http://localhost:9731 node tests/e2e/api.e2e.mjs
+
+  # 3) E2E UI (~55 langkah di Chrome headless: member, admin, layar HP 375 px)
+  cd ../frontend && BACKEND_PORT=9731 FRONTEND_PORT=9732 npm run dev &
+  npm i --no-save playwright-core
+  APP_URL=http://localhost:9732 node tests/e2e/ui.e2e.mjs
   ```
-- **E2E UI** (`frontend/tests/e2e/ui.e2e.mjs`, ±40 langkah di Chrome headless: member, admin, mobile). Butuh `playwright-core` (`npm i --no-save playwright-core`), backend sementara yang sudah `npm run seed:demo`, dan frontend yang diarahkan ke backend itu (`BACKEND_PORT=9731 FRONTEND_PORT=9732 npm run dev`), lalu `APP_URL=http://localhost:9732 node tests/e2e/ui.e2e.mjs`.
+  Setelah selesai: hentikan proses uji, `dropdb db_crm_alpaka_test`, hapus `backend/uploads_test` dan `backend/logs_test`.
 
 ## Catatan operasional
 

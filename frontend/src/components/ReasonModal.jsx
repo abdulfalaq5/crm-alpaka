@@ -39,7 +39,7 @@ export default function ReasonModal({ open, title, label, required = true, okTex
         form.resetFields();
         onCancel();
       }}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" preserve={false}>
         <Form.Item

@@ -54,10 +54,10 @@ export default function ReceiptQueue() {
         onRow={(r) => ({ onClick: () => navigate(`/admin/struk/${r.id}`), className: 'clickable-row' })}
         columns={[
           { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime, responsive: ['lg'] },
-          { title: 'Member', render: (_, r) => <>{r.member_nama}<div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{r.member_email}</div></> },
+          { title: 'Member', render: (_, r) => <>{r.member_nama}<div className="cell-sub">{r.member_email}</div></> },
           { title: 'Channel', dataIndex: 'channel', responsive: ['md'] },
           { title: 'No. transaksi', dataIndex: 'nomor_transaksi' },
-          { title: 'Nominal', dataIndex: 'nominal', render: rupiah, align: 'right' },
+          { title: 'Nominal', dataIndex: 'nominal', render: rupiah, align: 'right', responsive: ['sm'] },
           { title: 'Status', dataIndex: 'status', render: (s, r) => <><StatusBadge status={s} />{r.mode_persetujuan === 'otomatis' && <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>otomatis</div>}</> },
         ]}
       />

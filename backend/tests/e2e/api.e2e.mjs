@@ -1,6 +1,9 @@
 // E2E API. Jalankan di database KOSONG/sementara (membuat data uji): lihat README bagian "Pengujian".
 // Perlu server berjalan dengan ADMIN_EMAIL=admin@alpaka.local, ADMIN_PASSWORD=Admin-Alpaka-2026, MAIL_HOST kosong.
-const BASE = (process.env.API_URL || 'http://localhost:9721') + '/api';
+// KEAMANAN: tes ini membuat banyak data. Target WAJIB eksplisit dan bukan backend sistem utama (9721).
+if (!process.env.API_URL) { console.error('API_URL wajib diisi (backend sementara, mis. http://localhost:9731). Lihat README bagian Pengujian.'); process.exit(2); }
+if (/:(9721)\b/.test(process.env.API_URL)) { console.error('Ditolak: 9721 adalah backend sistem utama. Pakai backend sementara dengan database uji.'); process.exit(2); }
+const BASE = process.env.API_URL + '/api';
 let fails = 0;
 const check = (name, cond, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${cond ? '' : '  -> ' + extra}`); if (!cond) fails++; };
 const call = async (method, path, { token, json, form } = {}) => {

@@ -64,10 +64,9 @@ export default function Admins() {
         dataSource={data?.data || []}
         pagination={false}
         columns={[
-          { title: 'Nama', dataIndex: 'nama' },
-          { title: 'Email', dataIndex: 'email' },
+          { title: 'Admin', render: (_, r) => <>{r.nama}<div className="cell-sub">{r.email}</div></> },
           { title: 'Dibuat', dataIndex: 'created_at', render: fmtDate, responsive: ['md'] },
-          { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s === 'aktif' ? 'disetujui' : 'dibatalkan'} label={s === 'aktif' ? 'Aktif' : 'Nonaktif'} /> },
+          { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s === 'aktif' ? 'disetujui' : 'dibatalkan'} label={s === 'aktif' ? 'Aktif' : 'Nonaktif'} />, responsive: ['sm'] },
           {
             title: '',
             render: (_, r) => (
@@ -85,14 +84,14 @@ export default function Admins() {
           },
         ]}
       />
-      <Modal open={open} title="Tambah Admin" okText="Simpan" cancelText="Batal" onOk={() => form.submit()} onCancel={() => setOpen(false)} confirmLoading={saving} destroyOnClose forceRender>
+      <Modal open={open} title="Tambah Admin" okText="Simpan" cancelText="Batal" onOk={() => form.submit()} onCancel={() => setOpen(false)} confirmLoading={saving} destroyOnHidden forceRender>
         <Form form={form} layout="vertical" onFinish={create} requiredMark={false}>
           <Form.Item name="nama" label="Nama" rules={[{ required: true, whitespace: true, message: 'Nama wajib diisi' }]}><Input /></Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email valid wajib diisi' }]}><Input /></Form.Item>
           <Form.Item name="password" label="Kata sandi awal" rules={[{ required: true, min: 8, message: 'Minimal 8 karakter' }]}><Input.Password autoComplete="new-password" /></Form.Item>
         </Form>
       </Modal>
-      <Modal open={!!resetFor} title={`Reset kata sandi — ${resetFor?.nama || ''}`} okText="Reset" cancelText="Batal" onOk={() => resetForm.submit()} onCancel={() => setResetFor(null)} destroyOnClose forceRender>
+      <Modal open={!!resetFor} title={`Reset kata sandi — ${resetFor?.nama || ''}`} okText="Reset" cancelText="Batal" onOk={() => resetForm.submit()} onCancel={() => setResetFor(null)} destroyOnHidden forceRender>
         <Form form={resetForm} layout="vertical" onFinish={doReset} requiredMark={false}>
           <Form.Item name="password" label="Kata sandi baru" rules={[{ required: true, min: 8, message: 'Minimal 8 karakter' }]}><Input.Password autoComplete="new-password" /></Form.Item>
         </Form>

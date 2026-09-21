@@ -93,7 +93,7 @@ export default function Dashboard() {
                             { title: 'Channel', dataIndex: 'channel', responsive: ['md'] },
                             { title: 'Nominal', dataIndex: 'nominal', render: rupiah },
                             { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },
-                            { title: 'Poin', dataIndex: 'poin_diperoleh', align: 'right', render: (p) => (p ? `+${num(p)}` : '-') },
+                            { title: 'Poin', dataIndex: 'poin_diperoleh', align: 'right', render: (p) => (p ? `+${num(p)}` : '-'), responsive: ['sm'] },
                           ]}
                         />
                       )}

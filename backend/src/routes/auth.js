@@ -17,7 +17,7 @@ const router = express.Router();
 // Pembatasan percobaan login per IP (REG-04); pembatasan per akun ada di loginAccount().
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: config.loginRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { code: 'TOO_MANY_REQUESTS', message: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.' } },
