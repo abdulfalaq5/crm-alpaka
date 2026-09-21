@@ -10,7 +10,12 @@ export default function ReasonModal({ open, title, label, required = true, okTex
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
-    const values = await form.validateFields();
+    let values;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return; // pesan validasi sudah tampil di form
+    }
     setSaving(true);
     try {
       await onSubmit(values.text?.trim() || '');

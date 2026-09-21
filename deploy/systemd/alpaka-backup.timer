@@ -1,0 +1,11 @@
+# /etc/systemd/system/alpaka-backup.timer — backup harian pukul 02:00
+# Aktifkan: sudo systemctl enable --now alpaka-backup.timer   (cek: systemctl list-timers)
+[Unit]
+Description=Backup harian Alpaka Loyalty
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

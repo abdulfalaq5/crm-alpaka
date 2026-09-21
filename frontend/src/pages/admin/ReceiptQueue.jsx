@@ -49,14 +49,13 @@ export default function ReceiptQueue() {
         rowKey="id"
         loading={loading}
         dataSource={data?.data || []}
-        scroll={{ x: 800 }}
         locale={{ emptyText: <EmptyState text="Tidak ada struk pada filter ini" /> }}
         pagination={{ current: page, pageSize: 15, total: data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
         onRow={(r) => ({ onClick: () => navigate(`/admin/struk/${r.id}`), className: 'clickable-row' })}
         columns={[
-          { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime },
+          { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime, responsive: ['lg'] },
           { title: 'Member', render: (_, r) => <>{r.member_nama}<div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{r.member_email}</div></> },
-          { title: 'Channel', dataIndex: 'channel' },
+          { title: 'Channel', dataIndex: 'channel', responsive: ['md'] },
           { title: 'No. transaksi', dataIndex: 'nomor_transaksi' },
           { title: 'Nominal', dataIndex: 'nominal', render: rupiah, align: 'right' },
           { title: 'Status', dataIndex: 'status', render: (s, r) => <><StatusBadge status={s} />{r.mode_persetujuan === 'otomatis' && <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>otomatis</div>}</> },

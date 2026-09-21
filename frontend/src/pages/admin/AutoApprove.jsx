@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Form, InputNumber, Select, Switch, message } from 'antd';
+import { Alert, Button, Form, InputNumber, Select, Switch, App } from 'antd';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
 import { rupiah } from '../../format';
 
 // Pengaturan kriteria auto-approve (ADM-04, OI-05, BR-07).
 export default function AutoApprove() {
+  const { message } = App.useApp();
   const { data, reload } = useLoad('/admin/auto-approve');
   const { data: cfg } = useLoad('/config');
   const [form] = Form.useForm();

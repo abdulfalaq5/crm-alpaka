@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button, Col, Descriptions, Popconfirm, Row, Skeleton, message } from 'antd';
+import { Alert, Button, Col, Descriptions, Popconfirm, Row, Skeleton, App } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
@@ -13,9 +13,11 @@ const CHECK_LABEL = { kelengkapan: 'Kelengkapan data', duplikat: 'Duplikasi', ta
 
 // Review struk oleh admin (ADM-02, ADM-03, ADM-06): setelah diputuskan halaman menjadi read-only.
 export default function ReceiptReview() {
+  const { message } = App.useApp();
   const { id } = useParams();
   const { data, loading, error, reload } = useLoad(`/admin/receipts/${id}`);
   const [rejecting, setRejecting] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const [busy, setBusy] = useState(false);
   const r = data?.data;
 
@@ -41,6 +43,18 @@ export default function ReceiptReview() {
     } catch (err) {
       message.error(errMsg(err));
       if (err.response?.status === 409) { setRejecting(false); reload(); }
+      throw err;
+    }
+  };
+
+  const correct = async (alasan) => {
+    try {
+      await api.post(`/admin/receipts/${id}/correct`, { alasan });
+      message.success('Keputusan dikoreksi.');
+      setCorrecting(false);
+      reload();
+    } catch (err) {
+      message.error(errMsg(err)); // mis. poin sudah dipakai redeem / duplikat aktif
       throw err;
     }
   };
@@ -93,6 +107,18 @@ export default function ReceiptReview() {
                   </div>
                 ))}
               </div>
+              {r.koreksi?.length > 0 && (
+                <div className="card">
+                  <p className="section-label">Riwayat koreksi</p>
+                  {r.koreksi.map((k) => (
+                    <div key={k.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
+                      <div><StatusBadge status={k.dari_status} /> → <StatusBadge status={k.ke_status} />{k.poin_delta ? <b style={{ marginLeft: 8 }}>{k.poin_delta > 0 ? '+' : ''}{num(k.poin_delta)} poin</b> : null}</div>
+                      <div>{k.alasan}</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{k.admin_nama} · {fmtDateTime(k.created_at)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="card">
                 {r.status === 'menunggu_review' ? (
                   <>
@@ -114,11 +140,22 @@ export default function ReceiptReview() {
                       {r.alasan_penolakan && <Descriptions.Item label="Alasan">{r.alasan_penolakan}</Descriptions.Item>}
                       {r.poin_diperoleh && <Descriptions.Item label="Poin diberikan">{num(r.poin_diperoleh)}</Descriptions.Item>}
                     </Descriptions>
+                    <Button style={{ marginTop: 12 }} onClick={() => setCorrecting(true)}>Koreksi keputusan</Button>
                   </>
                 )}
               </div>
             </Col>
           </Row>
+          <ReasonModal
+            open={correcting}
+            danger={r.status === 'disetujui'}
+            title={r.status === 'disetujui' ? 'Koreksi: ubah menjadi DITOLAK' : 'Koreksi: ubah menjadi DISETUJUI'}
+            label="Alasan koreksi"
+            okText={r.status === 'disetujui' ? 'Tolak & batalkan poin' : 'Setujui & beri poin'}
+            placeholder={r.status === 'disetujui' ? 'Alasan ini ditampilkan kepada member. Poin dari struk ini akan dibatalkan.' : 'Catatan koreksi. Poin dicatat sesuai aturan konversi saat ini.'}
+            onSubmit={correct}
+            onCancel={() => setCorrecting(false)}
+          />
           <ReasonModal open={rejecting} danger title="Tolak struk" label="Alasan penolakan" okText="Tolak struk" onSubmit={reject} onCancel={() => setRejecting(false)} placeholder="Alasan ini akan ditampilkan kepada member" />
         </>
       )}

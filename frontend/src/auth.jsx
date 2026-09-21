@@ -7,9 +7,13 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => session.get()?.user || null);
+  const [expired, setExpired] = useState(false); // true bila sesi berakhir otomatis (ditampilkan di halaman login)
 
   useEffect(() => {
-    const onExpired = () => setUser(null);
+    const onExpired = () => {
+      setUser(null);
+      setExpired(true);
+    };
     window.addEventListener('alpaka:session-expired', onExpired);
     return () => window.removeEventListener('alpaka:session-expired', onExpired);
   }, []);
@@ -17,11 +21,18 @@ export function AuthProvider({ children }) {
   const signIn = useCallback((token, nextUser) => {
     session.set({ token, user: nextUser });
     setUser(nextUser);
+    setExpired(false);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback((byTimeout = false) => {
     session.clear();
     setUser(null);
+    setExpired(byTimeout === true);
+  }, []);
+
+  const replaceToken = useCallback((token) => {
+    const s = session.get();
+    if (s) session.set({ ...s, token });
   }, []);
 
   const updateUser = useCallback((nextUser) => {
@@ -39,7 +50,10 @@ export function AuthProvider({ children }) {
     [signIn]
   );
 
-  const value = useMemo(() => ({ user, login, signIn, signOut, updateUser }), [user, login, signIn, signOut, updateUser]);
+  const value = useMemo(
+    () => ({ user, expired, login, signIn, signOut, updateUser, replaceToken }),
+    [user, expired, login, signIn, signOut, updateUser, replaceToken]
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

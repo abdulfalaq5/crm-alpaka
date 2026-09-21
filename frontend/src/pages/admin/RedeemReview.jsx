@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button, Descriptions, Skeleton, message } from 'antd';
+import { Alert, Button, Descriptions, Skeleton, App } from 'antd';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
 import { fmtDateTime, num } from '../../format';
@@ -9,6 +9,7 @@ import ReasonModal from '../../components/ReasonModal';
 
 // Review redeem (RDM-04, RDM-05): setujui + catat detail pemberian, atau tolak dengan alasan wajib.
 export default function RedeemReview() {
+  const { message } = App.useApp();
   const { id } = useParams();
   const { data, loading, error, reload } = useLoad(`/admin/redeems/${id}`);
   const [mode, setMode] = useState(null); // 'approve' | 'reject'

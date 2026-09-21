@@ -14,6 +14,11 @@ test('hitungPoin: pembulatan & minimal transaksi', () => {
   assert.equal(hitungPoin(90000, { ...rule, minimal_transaksi: 100000 }), 0);
 });
 
+test('hitungSaldo: koreksi membalik poin masuk', () => {
+  assert.deepEqual(hitungSaldo({ masuk: 100, koreksi: 30 }), { total: 70, ditahan: 0, tersedia: 70 });
+  assert.deepEqual(hitungSaldo({ masuk: 100, hold: 40, koreksi: 30 }), { total: 70, ditahan: 40, tersedia: 30 });
+});
+
 test('hitungSaldo: hold mengurangi tersedia, terpakai memotong total, lepas mengembalikan', () => {
   assert.deepEqual(hitungSaldo({ masuk: 100 }), { total: 100, ditahan: 0, tersedia: 100 });
   assert.deepEqual(hitungSaldo({ masuk: 100, hold: 40 }), { total: 100, ditahan: 40, tersedia: 60 });

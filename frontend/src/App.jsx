@@ -1,27 +1,32 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { App as AntApp, ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider, Spin } from 'antd';
 import idID from 'antd/locale/id_ID';
 import { AuthProvider, RequireRole } from './auth';
 import MemberLayout from './layouts/MemberLayout';
 import AdminLayout from './layouts/AdminLayout';
+import SessionGuard from './components/SessionGuard';
 import Login from './pages/member/Login';
-import Register from './pages/member/Register';
-import ForgotPassword from './pages/member/ForgotPassword';
-import Dashboard from './pages/member/Dashboard';
-import ReceiptUpload from './pages/member/ReceiptUpload';
-import ReceiptList from './pages/member/ReceiptList';
-import ReceiptDetail from './pages/member/ReceiptDetail';
-import Redeem from './pages/member/Redeem';
-import Notifications from './pages/member/Notifications';
-import Profile from './pages/member/Profile';
-import ReceiptQueue from './pages/admin/ReceiptQueue';
-import ReceiptReview from './pages/admin/ReceiptReview';
-import RedeemQueue from './pages/admin/RedeemQueue';
-import RedeemReview from './pages/admin/RedeemReview';
-import AutoApprove from './pages/admin/AutoApprove';
-import ProgramSettings from './pages/admin/ProgramSettings';
-import Rewards from './pages/admin/Rewards';
-import AuditLog from './pages/admin/AuditLog';
+
+const Register = lazy(() => import('./pages/member/Register'));
+const ForgotPassword = lazy(() => import('./pages/member/ForgotPassword'));
+const Dashboard = lazy(() => import('./pages/member/Dashboard'));
+const ReceiptUpload = lazy(() => import('./pages/member/ReceiptUpload'));
+const ReceiptList = lazy(() => import('./pages/member/ReceiptList'));
+const ReceiptDetail = lazy(() => import('./pages/member/ReceiptDetail'));
+const Redeem = lazy(() => import('./pages/member/Redeem'));
+const Notifications = lazy(() => import('./pages/member/Notifications'));
+const Profile = lazy(() => import('./pages/member/Profile'));
+const ReceiptQueue = lazy(() => import('./pages/admin/ReceiptQueue'));
+const ReceiptReview = lazy(() => import('./pages/admin/ReceiptReview'));
+const RedeemQueue = lazy(() => import('./pages/admin/RedeemQueue'));
+const RedeemReview = lazy(() => import('./pages/admin/RedeemReview'));
+const AutoApprove = lazy(() => import('./pages/admin/AutoApprove'));
+const ProgramSettings = lazy(() => import('./pages/admin/ProgramSettings'));
+const Rewards = lazy(() => import('./pages/admin/Rewards'));
+const AuditLog = lazy(() => import('./pages/admin/AuditLog'));
+const Members = lazy(() => import('./pages/admin/Members'));
+const Admins = lazy(() => import('./pages/admin/Admins'));
 
 // Token desain dari FRONTEND.md (Bagian 0): monokrom, banyak whitespace, border tipis, radius 4px.
 const theme = {
@@ -39,7 +44,10 @@ const theme = {
     fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif",
     fontSize: 15,
   },
-  components: { Button: { primaryShadow: 'none', defaultShadow: 'none' } },
+  components: {
+    Button: { primaryShadow: 'none', defaultShadow: 'none' },
+    Menu: { itemSelectedBg: '#efece7', itemSelectedColor: '#171717', itemHoverBg: '#f5f3ef' },
+  },
 };
 
 export default function App() {
@@ -48,6 +56,8 @@ export default function App() {
       <AntApp>
         <AuthProvider>
           <BrowserRouter>
+            <SessionGuard />
+            <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', minHeight: '50vh' }}><Spin /></div>}>
             <Routes>
               <Route path="/masuk" element={<Login />} />
               <Route path="/daftar" element={<Register />} />
@@ -74,11 +84,14 @@ export default function App() {
                 <Route path="auto-approve" element={<AutoApprove />} />
                 <Route path="pengaturan" element={<ProgramSettings />} />
                 <Route path="reward" element={<Rewards />} />
+                <Route path="member" element={<Members />} />
+                <Route path="kelola-admin" element={<Admins />} />
                 <Route path="audit" element={<AuditLog />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </BrowserRouter>
         </AuthProvider>
       </AntApp>

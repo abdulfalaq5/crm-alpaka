@@ -6,7 +6,7 @@ import { useAuth } from '../../auth';
 
 // Login member (REG-04, REG-05). Mode admin memakai endpoint terpisah (REG-06).
 export default function Login({ admin = false }) {
-  const { login } = useAuth();
+  const { login, expired } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState(null);
@@ -30,6 +30,7 @@ export default function Login({ admin = false }) {
       <div className="card auth-card">
         <span className="brand">ALPAKA</span>
         <p className="section-label" style={{ textAlign: 'center' }}>{admin ? 'Login Admin' : 'Masuk'}</p>
+        {expired && !error && <Alert type="warning" showIcon message="Sesi Anda telah berakhir. Silakan masuk kembali." style={{ marginBottom: 16 }} />}
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
         <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
           <Form.Item name="identifier" label={admin ? 'Email' : 'Email atau nomor HP'} rules={[{ required: true, message: 'Wajib diisi' }]}>

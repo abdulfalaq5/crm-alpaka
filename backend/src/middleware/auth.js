@@ -10,8 +10,8 @@ function signToken(id, role) {
 }
 
 const TABLES = {
-  member: { sql: 'SELECT id, nama, status_akun AS status FROM members WHERE id = $1' },
-  admin: { sql: 'SELECT id, nama, status FROM admins WHERE id = $1' },
+  member: { sql: 'SELECT id, nama, status_akun AS status, extract(epoch from sesi_valid_sejak) AS valid_sejak FROM members WHERE id = $1' },
+  admin: { sql: 'SELECT id, nama, status, extract(epoch from sesi_valid_sejak) AS valid_sejak FROM admins WHERE id = $1' },
 };
 
 /**
@@ -38,11 +38,16 @@ function authenticate(...roles) {
     const { rows } = await pool.query(table.sql, [payload.sub]);
     const account = rows[0];
     if (!account || account.status !== 'aktif') throw unauthorized('Akun tidak aktif');
+    // Token yang terbit sebelum ganti password / reset / pencabutan sesi tidak berlaku lagi.
+    if (account.valid_sejak && payload.iat < Math.floor(Number(account.valid_sejak))) throw unauthorized();
 
     req.user = { id: account.id, nama: account.nama, role: payload.role };
 
     const remaining = payload.exp - Math.floor(Date.now() / 1000);
-    if (remaining < idleSeconds() / 2) {
+    // Permintaan latar belakang (mis. polling lonceng, header X-Background: 1) tidak memperpanjang sesi idle.
+    // X-Keepalive: 1 (tombol "Tetap masuk") selalu memperpanjang sesi.
+    const keepalive = req.headers['x-keepalive'] === '1';
+    if ((keepalive || remaining < idleSeconds() / 2) && req.headers['x-background'] !== '1') {
       res.setHeader('X-Refresh-Token', signToken(account.id, payload.role));
     }
     next();

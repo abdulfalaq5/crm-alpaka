@@ -1,0 +1,9 @@
+# /etc/systemd/system/alpaka-backup.service — dijalankan oleh alpaka-backup.timer
+[Unit]
+Description=Backup database & upload Alpaka Loyalty
+
+[Service]
+Type=oneshot
+User=alpaka
+WorkingDirectory=/opt/alpaka/backend
+ExecStart=/usr/bin/npm run --silent backup

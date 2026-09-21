@@ -1,17 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Alert, Button, Checkbox, Form, Input, Modal } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, App } from 'antd';
 import api, { errMsg, fieldErrors } from '../../api';
 import { useAuth } from '../../auth';
 
 // Registrasi member (REG-01..03, REG-08).
 export default function Register() {
+  const { modal } = App.useApp();
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [error, setError] = useState(null);
   const [exists, setExists] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [terms, setTerms] = useState('');
+
+  // Teks syarat & kebijakan privasi diatur admin (OI-15).
+  useEffect(() => {
+    api.get('/public/terms').then(({ data }) => setTerms(data.data.teks)).catch(() => {});
+  }, []);
 
   const onFinish = async ({ konfirmasi, ...values }) => {
     setLoading(true);
@@ -32,14 +39,10 @@ export default function Register() {
 
   const showTerms = (e) => {
     e.preventDefault();
-    Modal.info({
+    modal.info({
       title: 'Syarat Program & Kebijakan Privasi',
-      content: (
-        <p>
-          Teks syarat program dan kebijakan privasi resmi akan disediakan oleh Alpaka (OI-15). Dengan mendaftar, data Anda
-          hanya digunakan untuk keperluan program loyalty ini.
-        </p>
-      ),
+      width: 640,
+      content: <div style={{ maxHeight: '60vh', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>{terms || 'Teks belum tersedia.'}</div>,
     });
   };
 

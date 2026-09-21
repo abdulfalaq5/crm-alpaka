@@ -27,6 +27,19 @@ export const session = {
   },
 };
 
+/** Waktu kedaluwarsa (detik epoch) dari payload JWT; null bila tidak terbaca. */
+export function tokenExp(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.exp || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Header untuk permintaan latar belakang (polling) agar tidak memperpanjang sesi idle. */
+export const BACKGROUND = { headers: { 'X-Background': '1' } };
+
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use((config) => {

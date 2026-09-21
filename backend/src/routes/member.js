@@ -8,6 +8,10 @@ const { getSettings, getPointRule } = require('../services/settings');
 const receipts = require('../services/receipts');
 const redeems = require('../services/redeems');
 const { receiptUpload, filePath } = require('../services/files');
+const { signToken } = require('../middleware/auth');
+const mailer = require('../services/mailer');
+const whatsapp = require('../services/whatsapp');
+const { imageUrl } = require('../services/rewardImages');
 const { validate } = require('../utils/validate');
 const { asyncHandler, parsePagination, notFound, unprocessable, conflict } = require('../utils/http');
 const { contact, readContact, password } = require('./auth');
@@ -20,8 +24,12 @@ router.get(
   '/config',
   authenticate(),
   asyncHandler(async (req, res) => {
-    const s = await getSettings(pool);
-    res.json({ ...s, point_rule: await getPointRule(pool) });
+    const { terms_text: _terms, ...s } = await getSettings(pool);
+    res.json({
+      ...s,
+      point_rule: await getPointRule(pool),
+      notification_channels: { in_app: true, email: mailer.enabled(), whatsapp: whatsapp.enabled() },
+    });
   })
 );
 
@@ -112,9 +120,11 @@ router.get(
     const { rows: count } = await pool.query('SELECT COUNT(*)::int AS total FROM points_ledger WHERE member_id = $1', [req.user.id]);
     const { rows } = await pool.query(
       `SELECT l.id, l.jenis, l.jumlah, l.referensi_tipe, l.referensi_id, l.created_at,
-              CASE l.referensi_tipe WHEN 'receipt' THEN r.nomor_transaksi ELSE w.nama END AS keterangan
+              CASE l.referensi_tipe WHEN 'receipt' THEN r.nomor_transaksi WHEN 'koreksi' THEN rk.nomor_transaksi ELSE w.nama END AS keterangan
          FROM points_ledger l
          LEFT JOIN receipts r ON l.referensi_tipe = 'receipt' AND r.id = l.referensi_id
+         LEFT JOIN receipt_corrections c ON l.referensi_tipe = 'koreksi' AND c.id = l.referensi_id
+         LEFT JOIN receipts rk ON rk.id = c.receipt_id
          LEFT JOIN redeems d ON l.referensi_tipe = 'redeem' AND d.id = l.referensi_id
          LEFT JOIN rewards w ON w.id = d.reward_id
         WHERE l.member_id = $1
@@ -146,9 +156,9 @@ router.get(
   '/rewards',
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query(
-      'SELECT id, nama, deskripsi, poin_dibutuhkan FROM rewards WHERE aktif = TRUE ORDER BY poin_dibutuhkan, id'
+      'SELECT id, nama, deskripsi, poin_dibutuhkan, gambar_file FROM rewards WHERE aktif = TRUE ORDER BY poin_dibutuhkan, id'
     );
-    res.json({ data: rows });
+    res.json({ data: rows.map(({ gambar_file, ...r }) => ({ ...r, gambar_url: imageUrl({ ...r, gambar_file }) })) });
   })
 );
 
@@ -220,7 +230,7 @@ router.patch(
     try {
       const { rows } = await pool.query(
         `UPDATE members SET nama = $2, email = $3, no_hp = $4, updated_at = now()
-          WHERE id = $1 RETURNING id, nama, email, no_hp`,
+          WHERE id = $1 RETURNING id, nama, email, no_hp, notif_email, notif_whatsapp`,
         [req.user.id, v.nama, email, no_hp]
       );
       res.json({ user: { ...rows[0], role: 'member' } });
@@ -242,10 +252,24 @@ router.post(
     if (!(await bcrypt.compare(v.password_lama, rows[0].password_hash))) {
       throw unprocessable('Kata sandi lama salah', { password_lama: 'Kata sandi lama salah' });
     }
-    await pool.query('UPDATE members SET password_hash = $2, updated_at = now() WHERE id = $1', [
+    // Semua sesi lama dicabut (mis. perangkat lain); sesi ini mendapat token baru.
+    await pool.query('UPDATE members SET password_hash = $2, sesi_valid_sejak = now(), updated_at = now() WHERE id = $1', [
       req.user.id, await bcrypt.hash(v.password_baru, 10),
     ]);
-    res.json({ message: 'Kata sandi berhasil diubah' });
+    res.json({ message: 'Kata sandi berhasil diubah', token: signToken(req.user.id, 'member') });
+  })
+);
+
+// ---- Preferensi notifikasi (OI-08): in-app selalu aktif; email/WhatsApp dapat dimatikan ----
+router.patch(
+  '/member/notification-prefs',
+  asyncHandler(async (req, res) => {
+    const v = validate(Joi.object({ notif_email: Joi.boolean().required(), notif_whatsapp: Joi.boolean().required() }), req.body);
+    const { rows } = await pool.query(
+      'UPDATE members SET notif_email = $2, notif_whatsapp = $3, updated_at = now() WHERE id = $1 RETURNING notif_email, notif_whatsapp',
+      [req.user.id, v.notif_email, v.notif_whatsapp]
+    );
+    res.json({ data: rows[0] });
   })
 );
 

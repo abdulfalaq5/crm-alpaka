@@ -8,3 +8,5 @@ notes.md
 *.pdf
 uploads/
 uploads_test/
+backups/
+logs/

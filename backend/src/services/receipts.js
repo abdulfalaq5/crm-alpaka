@@ -14,8 +14,12 @@ const COLS = `
   to_char(r.tanggal_transaksi, 'YYYY-MM-DD') AS tanggal_transaksi,
   r.nominal::float8 AS nominal, r.status, r.mode_persetujuan, r.alasan_penolakan,
   r.waktu_keputusan, r.resubmit_of, r.created_at,
-  (SELECT pl.jumlah FROM points_ledger pl
-    WHERE pl.referensi_tipe = 'receipt' AND pl.referensi_id = r.id AND pl.jenis = 'masuk') AS poin_diperoleh,
+  (SELECT NULLIF(SUM(CASE pl.jenis WHEN 'masuk' THEN pl.jumlah ELSE -pl.jumlah END), 0)::int
+     FROM points_ledger pl
+    WHERE pl.jenis IN ('masuk', 'koreksi')
+      AND ((pl.referensi_tipe = 'receipt' AND pl.referensi_id = r.id)
+        OR (pl.referensi_tipe = 'koreksi' AND pl.referensi_id IN
+              (SELECT c.id FROM receipt_corrections c WHERE c.receipt_id = r.id)))) AS poin_diperoleh,
   (r.status = 'ditolak' AND NOT EXISTS (
     SELECT 1 FROM receipts c WHERE c.resubmit_of = r.id AND c.status <> 'ditolak')) AS bisa_diajukan_ulang`;
 
@@ -175,6 +179,15 @@ async function getReceipt(id, { memberId = null, admin = false } = {}) {
   );
   if (!rows.length) throw notFound('Struk tidak ditemukan');
   await attachFiles(rows);
+  if (admin) {
+    const { rows: corr } = await pool.query(
+      `SELECT c.id, c.dari_status, c.ke_status, c.alasan, c.poin_delta, c.created_at, a.nama AS admin_nama
+         FROM receipt_corrections c JOIN admins a ON a.id = c.dikoreksi_oleh
+        WHERE c.receipt_id = $1 ORDER BY c.id`,
+      [id]
+    );
+    rows[0].koreksi = corr;
+  }
   return rows[0];
 }
 

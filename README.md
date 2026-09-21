@@ -40,6 +40,17 @@ cd backend  && npm run seed:demo # + data demo: demo@alpaka.local / Demo-Alpaka-
 cd frontend && npm run build     # build produksi ke frontend/dist
 ```
 
+## Pengujian
+
+- `cd backend && npm test` — unit test logika (poin, validasi, auto-approve). Tidak butuh database.
+- **E2E API** (`backend/tests/e2e/api.e2e.mjs`, ±65 skenario: registrasi, RBAC, validasi, duplikat, approve paralel, redeem paralel, saldo, notifikasi, audit). Jalankan di **database sementara**, bukan database yang berisi data Anda:
+  ```bash
+  createdb db_crm_alpaka_test
+  cd backend && DB_NAME=db_crm_alpaka_test BACKEND_PORT=9731 MAIL_HOST= UPLOAD_DIR=uploads_test npm start &
+  API_URL=http://localhost:9731 node tests/e2e/api.e2e.mjs
+  ```
+- **E2E UI** (`frontend/tests/e2e/ui.e2e.mjs`, ±40 langkah di Chrome headless: member, admin, mobile). Butuh `playwright-core` (`npm i --no-save playwright-core`), backend sementara yang sudah `npm run seed:demo`, dan frontend yang diarahkan ke backend itu (`BACKEND_PORT=9731 FRONTEND_PORT=9732 npm run dev`), lalu `APP_URL=http://localhost:9732 node tests/e2e/ui.e2e.mjs`.
+
 ## Catatan operasional
 
 - **Email notifikasi (SMTP):** diatur lewat `MAIL_*` di `.env`. Untuk development dipakai **Mailtrap Sandbox** (`sandbox.smtp.mailtrap.io:2525`): email hanya masuk ke inbox sandbox dan tidak pernah sampai ke penerima asli. Kosongkan `MAIL_HOST` untuk mematikan email (notifikasi in-app tetap jalan).

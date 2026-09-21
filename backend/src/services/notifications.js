@@ -2,14 +2,17 @@
  * Layanan notifikasi (NTF). Setiap kanal adalah "provider" terpisah.
  * - in_app  : selalu aktif; disimpan ke tabel notifications dalam transaksi yang sama dengan perubahan status,
  *             sehingga sistem tetap berfungsi tanpa layanan pihak ketiga (NTF-05).
+ * - whatsapp: aktif bila WA_API_URL diisi (gateway HTTP generik) dan member punya no. HP.
  * - email   : aktif bila MAIL_HOST diisi di .env dan member punya email. Baris kanal 'email' dicatat
  *             ('menunggu') dalam transaksi, lalu dikirim SETELAH commit dan statusnya diperbarui
  *             menjadi 'terkirim' / 'gagal'. Kegagalan SMTP tidak pernah membatalkan proses bisnis.
- * Untuk kanal baru (WhatsApp/SMS, OI-08) cukup tambahkan provider ke `externalChannels`.
+ * Member dapat mematikan email/WhatsApp lewat preferensi notifikasi; in-app tidak bisa dimatikan.
+ * Untuk kanal baru (mis. SMS, OI-08) cukup tambahkan provider ke `externalChannels`.
  */
 const { pool } = require('../db/pool');
 const { config } = require('../config');
 const mailer = require('./mailer');
+const whatsapp = require('./whatsapp');
 
 const EVENTS = {
   struk_disetujui: 'Struk disetujui',
@@ -24,7 +27,7 @@ const LINKS = { receipt: (id) => `/struk/${id}`, redeem: () => '/redeem' };
 const emailChannel = {
   kanal: 'email',
   aktif: mailer.enabled,
-  alamat: (member) => member.email,
+  alamat: (member) => (member.notif_email ? member.email : null),
   kirim: (to, n) =>
     mailer.sendMail({
       to,
@@ -35,7 +38,14 @@ const emailChannel = {
       linkLabel: 'Lihat di Alpaka',
     }),
 };
-const externalChannels = [emailChannel];
+const whatsappChannel = {
+  kanal: 'whatsapp',
+  aktif: whatsapp.enabled,
+  alamat: (member) => (member.notif_whatsapp ? member.no_hp : null),
+  kirim: (to, n) => whatsapp.sendWhatsapp(to, `[Alpaka] ${EVENTS[n.jenis] || 'Notifikasi'}\n${n.isi}\n${config.appUrl}`),
+};
+// Tambahkan provider kanal baru (SMS, dll.) di sini; logic inti tidak perlu diubah.
+const externalChannels = [emailChannel, whatsappChannel];
 
 async function markStatus(id, status) {
   await pool.query('UPDATE notifications SET status_kirim = $2 WHERE id = $1', [id, status]).catch(() => {});
@@ -51,7 +61,7 @@ async function notify(client, { memberId, jenis, isi, referensiTipe = null, refe
 
   const active = externalChannels.filter((c) => c.aktif());
   if (active.length) {
-    const { rows: m } = await client.query('SELECT email FROM members WHERE id = $1', [memberId]);
+    const { rows: m } = await client.query('SELECT email, no_hp, notif_email, notif_whatsapp FROM members WHERE id = $1', [memberId]);
     for (const channel of active) {
       const to = channel.alamat(m[0]);
       if (!to) continue;

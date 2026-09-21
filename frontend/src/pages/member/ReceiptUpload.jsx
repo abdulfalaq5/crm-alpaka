@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Button, DatePicker, Form, Input, InputNumber, Select, Upload, message } from 'antd';
+import { Alert, Button, DatePicker, Form, Input, InputNumber, Select, Upload, App } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api, { errMsg, fieldErrors } from '../../api';
@@ -11,6 +11,7 @@ const OK_EXT = ['.jpg', '.jpeg', '.png', '.pdf'];
 
 // Upload struk/invoice (UPL-01..05). Dengan ?ulang=<id> halaman ini menjadi form pengajuan ulang (UPL-07).
 export default function ReceiptUpload() {
+  const { message } = App.useApp();
   const [params] = useSearchParams();
   const resubmitId = params.get('ulang');
   const navigate = useNavigate();

@@ -22,4 +22,5 @@ export const MUTATION = {
   hold: { label: 'Ditahan (Hold)', sign: '−', color: 'warning' },
   terpakai: { label: 'Terpakai', sign: '−', color: 'danger' },
   lepas: { label: 'Hold Dilepas', sign: '+', color: 'success' },
+  koreksi: { label: 'Koreksi Poin', sign: '−', color: 'danger' },
 };

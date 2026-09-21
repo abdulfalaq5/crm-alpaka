@@ -39,15 +39,14 @@ export default function RedeemQueue() {
         rowKey="id"
         loading={loading}
         dataSource={data?.data || []}
-        scroll={{ x: 640 }}
         locale={{ emptyText: <EmptyState text="Tidak ada redeem pada filter ini" /> }}
         pagination={{ current: page, pageSize: 15, total: data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
         onRow={(r) => ({ onClick: () => navigate(`/admin/redeem/${r.id}`), className: 'clickable-row' })}
         columns={[
-          { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime },
+          { title: 'Diajukan', dataIndex: 'created_at', render: fmtDateTime, responsive: ['md'] },
           { title: 'Member', render: (_, r) => <>{r.member_nama}<div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{r.member_email}</div></> },
           { title: 'Reward', dataIndex: 'reward_nama' },
-          { title: 'Poin', dataIndex: 'jumlah_poin', render: num, align: 'right' },
+          { title: 'Poin', dataIndex: 'jumlah_poin', render: num, align: 'right', responsive: ['sm'] },
           { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },
         ]}
       />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Form, InputNumber, Select, message } from 'antd';
+import { Button, Form, Input, InputNumber, Select, App } from 'antd';
 import api, { errMsg, fieldErrors } from '../../api';
 import { useLoad } from '../../hooks';
 
@@ -7,6 +7,7 @@ const money = { style: { width: '100%' }, controls: false, min: 0, formatter: (v
 
 // Parameter program yang bisa diubah tanpa ubah kode: konversi poin, masa klaim, batas file, channel.
 export default function ProgramSettings() {
+  const { message } = App.useApp();
   const { data, reload } = useLoad('/admin/settings');
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
@@ -46,6 +47,12 @@ export default function ProgramSettings() {
           <Form.Item name="min_nominal" label="Nominal minimal per struk"><InputNumber {...money} /></Form.Item>
           <Form.Item name="channels" label="Channel resmi" rules={[{ required: true, type: 'array', min: 1, message: 'Minimal satu channel' }]}>
             <Select mode="tags" tokenSeparators={[',']} placeholder="Ketik nama channel lalu Enter" />
+          </Form.Item>
+        </div>
+        <div className="card">
+          <p className="section-label">Syarat program & kebijakan privasi</p>
+          <Form.Item name="terms_text" extra="Tampil di halaman registrasi. Ganti draf ini dengan teks resmi dari Alpaka sebelum go-live.">
+            <Input.TextArea rows={10} maxLength={20000} showCount />
           </Form.Item>
         </div>
         <div className="card">

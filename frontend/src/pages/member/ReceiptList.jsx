@@ -37,13 +37,12 @@ export default function ReceiptList() {
         rowKey="id"
         loading={loading}
         dataSource={data?.data || []}
-        scroll={{ x: 620 }}
         locale={{ emptyText: <EmptyState text="Belum ada struk"><Button type="link" onClick={() => navigate('/upload')}>Upload struk pertama Anda</Button></EmptyState> }}
         pagination={{ current: page, pageSize: 10, total: data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
         onRow={(r) => ({ onClick: () => navigate(`/struk/${r.id}`), className: 'clickable-row' })}
         columns={[
-          { title: 'Tanggal transaksi', dataIndex: 'tanggal_transaksi', render: fmtDate },
-          { title: 'Channel', dataIndex: 'channel' },
+          { title: 'Tanggal transaksi', dataIndex: 'tanggal_transaksi', render: fmtDate, responsive: ['md'] },
+          { title: 'Channel', dataIndex: 'channel', responsive: ['md'] },
           { title: 'No. transaksi', dataIndex: 'nomor_transaksi' },
           { title: 'Nominal', dataIndex: 'nominal', render: rupiah, align: 'right' },
           { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },

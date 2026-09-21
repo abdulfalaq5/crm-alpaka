@@ -10,8 +10,8 @@ function hitungPoin(nominal, rule) {
 }
 
 /** Hitung saldo dari ledger (PNT-03). Fungsi murni atas jumlah per jenis. */
-function hitungSaldo({ masuk = 0, hold = 0, terpakai = 0, lepas = 0 }) {
-  const total = masuk - terpakai;
+function hitungSaldo({ masuk = 0, hold = 0, terpakai = 0, lepas = 0, koreksi = 0 }) {
+  const total = masuk - terpakai - koreksi; // koreksi = pembalikan poin masuk dari struk yang dikoreksi
   const ditahan = hold - lepas - terpakai;
   return { total, ditahan, tersedia: total - ditahan };
 }

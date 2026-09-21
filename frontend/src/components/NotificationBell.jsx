@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Button, Popover } from 'antd';
 import { BellOutlined } from '@ant-design/icons';
-import api from '../api';
+import api, { BACKGROUND } from '../api';
 import { fmtDateTime } from '../format';
 
 // Ikon lonceng dengan badge jumlah belum dibaca (NTF-04).
@@ -12,7 +12,7 @@ export default function NotificationBell() {
 
   const load = useCallback(async () => {
     try {
-      const { data: res } = await api.get('/member/notifications', { params: { limit: 5 } });
+      const { data: res } = await api.get('/member/notifications', { params: { limit: 5 }, ...BACKGROUND });
       setData({ items: res.data, unread: res.meta.belum_dibaca });
     } catch {
       /* diam: badge hanya pelengkap */

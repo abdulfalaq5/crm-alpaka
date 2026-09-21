@@ -8,6 +8,10 @@ const redeems = require('../services/redeems');
 const { validate } = require('../utils/validate');
 const { asyncHandler, parsePagination, notFound } = require('../utils/http');
 const { sendReceiptFile } = require('./member');
+const bcrypt = require('bcryptjs');
+const { correctReceipt } = require('../services/corrections');
+const { rewardImageUpload, saveRewardImage, removeRewardImage, imageUrl } = require('../services/rewardImages');
+const { conflict } = require('../utils/http');
 
 const router = express.Router();
 router.use(authenticate('admin'));
@@ -46,6 +50,14 @@ router.post(
   asyncHandler(async (req, res) => {
     const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan penolakan wajib diisi', 'string.empty': 'Alasan penolakan wajib diisi', 'string.min': 'Alasan penolakan terlalu pendek' }) }), req.body);
     res.json({ data: await receipts.decideReceipt({ id: req.params.id, adminId: req.user.id, approve: false, alasan: v.alasan }) });
+  })
+);
+
+router.post(
+  '/receipts/:id/correct',
+  asyncHandler(async (req, res) => {
+    const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan koreksi wajib diisi', 'string.empty': 'Alasan koreksi wajib diisi', 'string.min': 'Alasan koreksi terlalu pendek' }) }), req.body);
+    res.json({ data: await correctReceipt({ id: req.params.id, adminId: req.user.id, alasan: v.alasan }) });
   })
 );
 
@@ -126,6 +138,7 @@ const settingsSchema = Joi.object({
   max_file_size_mb: Joi.number().integer().min(1).max(20).required(),
   max_files: Joi.number().integer().min(1).max(10).required(),
   channels: Joi.array().items(Joi.string().trim().min(1).max(60)).min(1).max(50).unique().required(),
+  terms_text: Joi.string().allow('').max(20000), // opsional: bila tidak dikirim, teks yang ada tidak diubah
 });
 
 router.get(
@@ -169,9 +182,11 @@ const rewardSchema = Joi.object({
   aktif: Joi.boolean().default(true),
 });
 
+const withImage = ({ gambar_file, gambar_mime, ...r }) => ({ ...r, gambar_url: imageUrl({ ...r, gambar_file }) });
+
 router.get('/rewards', asyncHandler(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM rewards ORDER BY aktif DESC, poin_dibutuhkan, id');
-  res.json({ data: rows });
+  res.json({ data: rows.map(withImage) });
 }));
 
 router.post('/rewards', asyncHandler(async (req, res) => {
@@ -184,7 +199,7 @@ router.post('/rewards', asyncHandler(async (req, res) => {
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'reward.buat', objekTipe: 'reward', objekId: rows[0].id, detail: v });
     return rows[0];
   });
-  res.status(201).json({ data: row });
+  res.status(201).json({ data: withImage(row) });
 }));
 
 router.put('/rewards/:id', asyncHandler(async (req, res) => {
@@ -196,6 +211,128 @@ router.put('/rewards/:id', asyncHandler(async (req, res) => {
     );
     if (!rows.length) throw notFound('Reward tidak ditemukan');
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'reward.ubah', objekTipe: 'reward', objekId: rows[0].id, detail: v });
+    return rows[0];
+  });
+  res.json({ data: withImage(row) });
+}));
+
+// Gambar reward (OI-09): unggah/ganti dan hapus.
+router.post('/rewards/:id/image', rewardImageUpload, asyncHandler(async (req, res) => {
+  const { rows: cur } = await pool.query('SELECT gambar_file FROM rewards WHERE id = $1', [req.params.id]);
+  if (!cur.length) throw notFound('Reward tidak ditemukan');
+  const saved = await saveRewardImage(req.file);
+  const { rows } = await pool.query('UPDATE rewards SET gambar_file = $2, gambar_mime = $3 WHERE id = $1 RETURNING *', [req.params.id, saved.name, saved.mime]);
+  await removeRewardImage(cur[0].gambar_file);
+  await audit(pool, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'reward.gambar', objekTipe: 'reward', objekId: rows[0].id });
+  res.json({ data: withImage(rows[0]) });
+}));
+
+router.delete('/rewards/:id/image', asyncHandler(async (req, res) => {
+  const { rows: cur } = await pool.query('SELECT gambar_file FROM rewards WHERE id = $1', [req.params.id]);
+  if (!cur.length) throw notFound('Reward tidak ditemukan');
+  await pool.query('UPDATE rewards SET gambar_file = NULL, gambar_mime = NULL WHERE id = $1', [req.params.id]);
+  await removeRewardImage(cur[0].gambar_file);
+  res.json({ message: 'ok' });
+}));
+
+// ---- Manajemen admin (OI-13): semua admin berhak akses penuh; tidak ada peran bertingkat di Fase 1 ----
+router.get('/admins', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query('SELECT id, nama, email, status, created_at FROM admins ORDER BY id');
+  res.json({ data: rows });
+}));
+
+const passwordRule = Joi.string().min(8).max(72).messages({ 'string.min': 'Kata sandi minimal 8 karakter', 'string.max': 'Kata sandi maksimal 72 karakter' });
+
+router.post('/admins', asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({
+    nama: Joi.string().trim().min(2).max(120).required().messages({ 'any.required': 'Nama wajib diisi', 'string.empty': 'Nama wajib diisi' }),
+    email: Joi.string().trim().lowercase().email({ tlds: { allow: false } }).max(160).required().messages({ 'any.required': 'Email wajib diisi', 'string.email': 'Format email tidak valid', 'string.empty': 'Email wajib diisi' }),
+    password: passwordRule.required().messages({ 'any.required': 'Kata sandi wajib diisi' }),
+  }), req.body);
+  try {
+    const row = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        'INSERT INTO admins (nama, email, password_hash) VALUES ($1, $2, $3) RETURNING id, nama, email, status, created_at',
+        [v.nama, v.email, await bcrypt.hash(v.password, 10)]
+      );
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'admin.buat', objekTipe: 'admin', objekId: rows[0].id, detail: { email: v.email } });
+      return rows[0];
+    });
+    res.status(201).json({ data: row });
+  } catch (err) {
+    if (err.code === '23505') throw conflict('Email admin sudah terdaftar.', 'IDENTIFIER_EXISTS');
+    throw err;
+  }
+}));
+
+router.patch('/admins/:id', asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({ status: Joi.string().valid('aktif', 'nonaktif'), password: passwordRule }).or('status', 'password'), req.body);
+  const row = await withTransaction(async (client) => {
+    const { rows: cur } = await client.query('SELECT id, status FROM admins WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!cur.length) throw notFound('Admin tidak ditemukan');
+    const sets = [];
+    const params = [req.params.id];
+    const detail = {};
+    if (v.status && v.status !== cur[0].status) {
+      if (v.status === 'nonaktif') {
+        if (String(req.user.id) === String(req.params.id)) throw conflict('Anda tidak dapat menonaktifkan akun sendiri.', 'SELF_DEACTIVATE');
+        const { rows: active } = await client.query("SELECT COUNT(*)::int AS n FROM admins WHERE status = 'aktif' AND id <> $1", [req.params.id]);
+        if (active[0].n < 1) throw conflict('Minimal harus ada satu admin aktif.', 'LAST_ADMIN');
+      }
+      params.push(v.status);
+      sets.push(`status = $${params.length}`, 'sesi_valid_sejak = now()');
+      detail.status = v.status;
+    }
+    if (v.password) {
+      params.push(await bcrypt.hash(v.password, 10));
+      sets.push(`password_hash = $${params.length}`, 'gagal_login = 0', 'terkunci_sampai = NULL', 'sesi_valid_sejak = now()');
+      detail.password = 'direset';
+    }
+    if (!sets.length) return (await client.query('SELECT id, nama, email, status, created_at FROM admins WHERE id = $1', [req.params.id])).rows[0];
+    const { rows } = await client.query(`UPDATE admins SET ${[...new Set(sets)].join(', ')} WHERE id = $1 RETURNING id, nama, email, status, created_at`, params);
+    await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'admin.ubah', objekTipe: 'admin', objekId: rows[0].id, detail });
+    return rows[0];
+  });
+  res.json({ data: row });
+}));
+
+// ---- Manajemen member: daftar dengan saldo, aktif/nonaktifkan akun ----
+router.get('/members', asyncHandler(async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  const params = [];
+  const where = [];
+  if (req.query.status) { params.push(req.query.status); where.push(`m.status_akun = $${params.length}`); }
+  if (req.query.q) { params.push(`%${req.query.q}%`); where.push(`(m.nama ILIKE $${params.length} OR m.email ILIKE $${params.length} OR m.no_hp ILIKE $${params.length})`); }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { rows: count } = await pool.query(`SELECT COUNT(*)::int AS total FROM members m ${clause}`, params);
+  const { rows } = await pool.query(
+    `SELECT m.id, m.nama, m.email, m.no_hp, m.status_akun, m.created_at,
+            COALESCE(s.masuk, 0) - COALESCE(s.terpakai, 0) - COALESCE(s.koreksi, 0) AS total,
+            COALESCE(s.masuk, 0) - COALESCE(s.hold, 0) + COALESCE(s.lepas, 0) - COALESCE(s.koreksi, 0) AS tersedia,
+            (SELECT COUNT(*)::int FROM receipts r WHERE r.member_id = m.id) AS jumlah_struk
+       FROM members m
+       LEFT JOIN (
+         SELECT member_id,
+                SUM(jumlah) FILTER (WHERE jenis = 'masuk')::int AS masuk, SUM(jumlah) FILTER (WHERE jenis = 'hold')::int AS hold,
+                SUM(jumlah) FILTER (WHERE jenis = 'terpakai')::int AS terpakai, SUM(jumlah) FILTER (WHERE jenis = 'lepas')::int AS lepas,
+                SUM(jumlah) FILTER (WHERE jenis = 'koreksi')::int AS koreksi
+           FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
+       ${clause} ORDER BY m.created_at DESC, m.id DESC LIMIT ${limit} OFFSET ${offset}`,
+    params
+  );
+  res.json({ data: rows, meta: { page, limit, total: count[0].total } });
+}));
+
+router.patch('/members/:id', asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({ status_akun: Joi.string().valid('aktif', 'nonaktif').required() }), req.body);
+  const row = await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `UPDATE members SET status_akun = $2::varchar, sesi_valid_sejak = CASE WHEN $2::varchar = 'nonaktif' THEN now() ELSE sesi_valid_sejak END, updated_at = now()
+        WHERE id = $1 RETURNING id, nama, email, no_hp, status_akun`,
+      [req.params.id, v.status_akun]
+    );
+    if (!rows.length) throw notFound('Member tidak ditemukan');
+    await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: v.status_akun === 'aktif' ? 'member.aktifkan' : 'member.nonaktifkan', objekTipe: 'member', objekId: rows[0].id });
     return rows[0];
   });
   res.json({ data: row });

@@ -30,7 +30,7 @@ const password = Joi.string().min(8).max(72).required().messages({
 });
 
 const contact = {
-  email: Joi.string().trim().lowercase().email().max(160).allow('', null).messages({ 'string.email': 'Format email tidak valid' }),
+  email: Joi.string().trim().lowercase().email({ tlds: { allow: false } }).max(160).allow('', null).messages({ 'string.email': 'Format email tidak valid' }),
   no_hp: Joi.string().trim().max(20).allow('', null),
 };
 
@@ -162,7 +162,7 @@ router.get(
   authenticate(),
   asyncHandler(async (req, res) => {
     const table = req.user.role === 'admin' ? 'admins' : 'members';
-    const cols = req.user.role === 'admin' ? 'id, nama, email' : 'id, nama, email, no_hp';
+    const cols = req.user.role === 'admin' ? 'id, nama, email' : 'id, nama, email, no_hp, notif_email, notif_whatsapp';
     const { rows } = await pool.query(`SELECT ${cols} FROM ${table} WHERE id = $1`, [req.user.id]);
     res.json({ user: { ...rows[0], role: req.user.role } });
   })
@@ -222,7 +222,7 @@ router.post(
       );
       if (!rows.length) throw unprocessable('Tautan pemulihan tidak valid atau sudah kedaluwarsa');
       await client.query(
-        'UPDATE members SET password_hash = $2, gagal_login = 0, terkunci_sampai = NULL, updated_at = now() WHERE id = $1',
+        'UPDATE members SET password_hash = $2, gagal_login = 0, terkunci_sampai = NULL, sesi_valid_sejak = now(), updated_at = now() WHERE id = $1',
         [rows[0].member_id, newHash]
       );
       await audit(client, { pelakuTipe: 'member', pelakuId: rows[0].member_id, aksi: 'member.reset_password', objekTipe: 'member', objekId: rows[0].member_id });

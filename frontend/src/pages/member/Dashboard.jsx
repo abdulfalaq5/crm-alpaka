@@ -18,11 +18,10 @@ function Mutations() {
       dataSource={data?.data || []}
       locale={{ emptyText: <EmptyState text="Belum ada mutasi poin" /> }}
       pagination={{ current: page, pageSize: 10, total: data?.meta.total || 0, onChange: setPage, showSizeChanger: false }}
-      scroll={{ x: 520 }}
       columns={[
-        { title: 'Tanggal', dataIndex: 'created_at', render: fmtDateTime },
+        { title: 'Tanggal', dataIndex: 'created_at', render: fmtDateTime, responsive: ['sm'] },
         { title: 'Jenis', dataIndex: 'jenis', render: (j) => MUTATION[j].label },
-        { title: 'Keterangan', dataIndex: 'keterangan', render: (k, r) => (r.referensi_tipe === 'receipt' ? `Struk ${k}` : `Redeem ${k || ''}`) },
+        { title: 'Keterangan', dataIndex: 'keterangan', render: (k, r) => (r.referensi_tipe === 'receipt' ? `Struk ${k}` : r.referensi_tipe === 'koreksi' ? `Koreksi struk ${k}` : `Redeem ${k || ''}`) },
         {
           title: 'Poin',
           align: 'right',
@@ -88,11 +87,10 @@ export default function Dashboard() {
                           size="small"
                           pagination={false}
                           dataSource={d.struk_terbaru}
-                          scroll={{ x: 480 }}
                           onRow={(r) => ({ onClick: () => navigate(`/struk/${r.id}`), className: 'clickable-row' })}
                           columns={[
                             { title: 'Tanggal', dataIndex: 'tanggal_transaksi', render: fmtDate },
-                            { title: 'Channel', dataIndex: 'channel' },
+                            { title: 'Channel', dataIndex: 'channel', responsive: ['md'] },
                             { title: 'Nominal', dataIndex: 'nominal', render: rupiah },
                             { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },
                             { title: 'Poin', dataIndex: 'poin_diperoleh', align: 'right', render: (p) => (p ? `+${num(p)}` : '-') },
@@ -111,9 +109,8 @@ export default function Dashboard() {
                           size="small"
                           pagination={false}
                           dataSource={d.redeem_terbaru}
-                          scroll={{ x: 420 }}
                           columns={[
-                            { title: 'Tanggal', dataIndex: 'created_at', render: fmtDate },
+                            { title: 'Tanggal', dataIndex: 'created_at', render: fmtDate, responsive: ['sm'] },
                             { title: 'Reward', dataIndex: 'reward_nama' },
                             { title: 'Poin', dataIndex: 'jumlah_poin', render: num },
                             { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s} /> },

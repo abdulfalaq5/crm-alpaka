@@ -46,6 +46,9 @@ const config = {
     // Jeda antar email (ms). Mailtrap sandbox hanya mengizinkan ±1 email/detik, jadi default 1100 ms untuk host mailtrap.
     intervalMs: int(process.env.MAIL_INTERVAL_MS, /mailtrap/i.test(process.env.MAIL_HOST || '') ? 1100 : 0),
   },
+  // WhatsApp lewat gateway HTTP generik (OI-08). Nonaktif bila WA_API_URL kosong.
+  whatsapp: { url: process.env.WA_API_URL, token: process.env.WA_API_TOKEN },
+  logDir: path.resolve(__dirname, '..', process.env.LOG_DIR || 'logs'),
   maxLoginAttempts: 5,
   lockMinutes: 15,
 };

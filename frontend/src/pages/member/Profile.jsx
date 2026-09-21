@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Form, Input, message } from 'antd';
+import { Alert, App, Button, Form, Input, Switch } from 'antd';
 import api, { errMsg, fieldErrors } from '../../api';
 import { useAuth } from '../../auth';
+import { useLoad } from '../../hooks';
 
-// Profil dasar & ganti kata sandi (REG-07).
+// Profil dasar, ganti kata sandi (REG-07), dan preferensi notifikasi (OI-08).
 export default function Profile() {
-  const { user, updateUser } = useAuth();
+  const { message } = App.useApp();
+  const { user, updateUser, replaceToken } = useAuth();
   const [form] = Form.useForm();
   const [pwForm] = Form.useForm();
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const { data: me } = useLoad('/auth/me');
+  const { data: cfg } = useLoad('/config');
+  const [prefs, setPrefs] = useState({ notif_email: true, notif_whatsapp: true });
 
   useEffect(() => {
     form.setFieldsValue({ nama: user?.nama, email: user?.email, no_hp: user?.no_hp });
   }, [user, form]);
+
+  useEffect(() => {
+    if (me) setPrefs({ notif_email: me.user.notif_email, notif_whatsapp: me.user.notif_whatsapp });
+  }, [me]);
 
   const saveProfile = async (values) => {
     setSaving(true);
@@ -32,8 +41,9 @@ export default function Profile() {
 
   const savePassword = async ({ password_lama, password_baru }) => {
     try {
-      await api.post('/member/password', { password_lama, password_baru });
-      message.success('Kata sandi diubah.');
+      const { data } = await api.post('/member/password', { password_lama, password_baru });
+      replaceToken(data.token); // sesi lain dicabut; sesi ini memakai token baru
+      message.success('Kata sandi diubah. Sesi di perangkat lain telah keluar.');
       pwForm.resetFields();
     } catch (err) {
       if (err.response?.status === 422) pwForm.setFields(fieldErrors(err));
@@ -41,6 +51,19 @@ export default function Profile() {
     }
   };
 
+  const savePrefs = async (next) => {
+    const before = prefs;
+    setPrefs(next);
+    try {
+      await api.patch('/member/notification-prefs', next);
+      message.success('Preferensi notifikasi disimpan.');
+    } catch (err) {
+      setPrefs(before);
+      message.error(errMsg(err));
+    }
+  };
+
+  const ch = cfg?.notification_channels || {};
   return (
     <>
       <h1 className="page-title">Profil</h1>
@@ -54,6 +77,18 @@ export default function Profile() {
           <Form.Item name="no_hp" label="Nomor HP"><Input /></Form.Item>
           <Button type="primary" htmlType="submit" loading={saving}>Simpan</Button>
         </Form>
+      </div>
+      <div className="card" style={{ maxWidth: 560 }}>
+        <p className="section-label">Preferensi notifikasi</p>
+        <div className="pref-row"><span>Di dalam aplikasi</span><Switch checked disabled aria-label="Notifikasi in-app" /></div>
+        <div className="pref-row">
+          <span>Email{!ch.email && <small> — belum tersedia</small>}</span>
+          <Switch checked={prefs.notif_email} disabled={!ch.email} aria-label="Notifikasi email" onChange={(v) => savePrefs({ ...prefs, notif_email: v })} />
+        </div>
+        <div className="pref-row">
+          <span>WhatsApp{!ch.whatsapp && <small> — belum tersedia</small>}</span>
+          <Switch checked={prefs.notif_whatsapp} disabled={!ch.whatsapp} aria-label="Notifikasi WhatsApp" onChange={(v) => savePrefs({ ...prefs, notif_whatsapp: v })} />
+        </div>
       </div>
       <div className="card" style={{ maxWidth: 560 }}>
         <p className="section-label">Ganti kata sandi</p>

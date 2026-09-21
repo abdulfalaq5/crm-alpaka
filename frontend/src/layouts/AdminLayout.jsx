@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Badge, Button, Layout, Menu } from 'antd';
-import { AuditOutlined, FileDoneOutlined, GiftOutlined, LogoutOutlined, SettingOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { AuditOutlined, FileDoneOutlined, GiftOutlined, LogoutOutlined, SafetyOutlined, SettingOutlined, SwapOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth';
 import { useLoad } from '../hooks';
 
@@ -19,6 +19,8 @@ export default function AdminLayout() {
     { key: '/admin/auto-approve', icon: <ThunderboltOutlined />, label: <Link to="/admin/auto-approve">Pengaturan Auto-Approve</Link> },
     { key: '/admin/pengaturan', icon: <SettingOutlined />, label: <Link to="/admin/pengaturan">Pengaturan Program</Link> },
     { key: '/admin/reward', icon: <GiftOutlined />, label: <Link to="/admin/reward">Reward</Link> },
+    { key: '/admin/member', icon: <TeamOutlined />, label: <Link to="/admin/member">Member</Link> },
+    { key: '/admin/kelola-admin', icon: <SafetyOutlined />, label: <Link to="/admin/kelola-admin">Kelola Admin</Link> },
     { key: '/admin/audit', icon: <AuditOutlined />, label: <Link to="/admin/audit">Log Audit</Link> },
   ];
   const selected = items.map((i) => i.key).filter((k) => pathname.startsWith(k));

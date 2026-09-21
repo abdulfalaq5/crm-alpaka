@@ -8,7 +8,7 @@ const COLORS = {
 };
 
 // Badge teks kecil berwarna sesuai token (bukan ikon besar mencolok).
-export default function StatusBadge({ status }) {
+export default function StatusBadge({ status, label }) {
   const s = STATUS[status] || { label: status, color: 'neutral' };
   const color = COLORS[s.color];
   return (
@@ -24,7 +24,7 @@ export default function StatusBadge({ status }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {s.label}
+      {label || s.label}
     </span>
   );
 }

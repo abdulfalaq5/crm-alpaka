@@ -1,0 +1,22 @@
+# /etc/systemd/system/alpaka-backend.service
+# Aktifkan: sudo systemctl daemon-reload && sudo systemctl enable --now alpaka-backend
+# Sesuaikan User, WorkingDirectory, dan path node (which node).
+[Unit]
+Description=Alpaka Loyalty API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=alpaka
+WorkingDirectory=/opt/alpaka/backend
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+# .env dibaca dari root proyek (/opt/alpaka/.env); pastikan izin file: chmod 600 /opt/alpaka/.env
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/alpaka/backend/uploads /opt/alpaka/backend/logs /opt/alpaka/backend/backups
+
+[Install]
+WantedBy=multi-user.target

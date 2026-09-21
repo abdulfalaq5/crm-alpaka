@@ -11,6 +11,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          // Pecah vendor agar cache browser efektif dan bundle awal lebih kecil.
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router-dom'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 900,
+    },
     resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
     server: {
       port: frontendPort,

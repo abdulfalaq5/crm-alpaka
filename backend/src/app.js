@@ -7,6 +7,8 @@ const { notFoundHandler, errorHandler } = require('./middleware/error');
 const auth = require('./routes/auth');
 const member = require('./routes/member');
 const admin = require('./routes/admin');
+const pub = require('./routes/public');
+const { requestLog } = require('./middleware/requestLog');
 
 function createApp() {
   const app = express();
@@ -21,6 +23,7 @@ function createApp() {
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(cors({ origin: config.corsOrigins, exposedHeaders: ['X-Refresh-Token'] }));
+  app.use(requestLog);
   app.use(express.json({ limit: '100kb' }));
 
   app.use(
@@ -35,6 +38,7 @@ function createApp() {
 
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
   app.use('/api/auth', auth.router);
+  app.use('/api/public', pub.router);
   app.use('/api/admin', admin.router);
   app.use('/api', member.router);
 
