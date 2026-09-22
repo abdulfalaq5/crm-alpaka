@@ -121,16 +121,16 @@ Kasus yang bisa ditunjukkan: struk ditolak lalu diajukan ulang dan disetujui, du
 
 **Member** — login di `/masuk` (http://localhost:9722/masuk). Kata sandi semua member demo: `Demo-Alpaka-2026`
 
-| Nama | Login (email / no. HP) | Keterangan |
-|---|---|---|
-| Member Demo | `demo@alpaka.local` | Akun utama untuk presentasi: riwayat terlengkap. Saldo: total 275, ditahan 60, tersedia 215 |
-| Sari Wulandari | `sari.wulandari@example.com` | |
-| Budi Santoso | `budi.santoso@example.com` | |
-| Dewi Lestari | `6281234500004` (no. HP, tanpa email) | Login pakai nomor HP; format `0812...` atau `+62812...` juga diterima |
-| Rian Pratama | `rian.pratama@example.com` | Poin 250 sedang ditahan untuk redeem |
-| Maya Anggraini | `maya.anggraini@example.com` | |
-| Agus Setiawan | `agus.setiawan@example.com` | |
-| Nina Kusuma | `nina.kusuma@example.com` | Member baru |
+| Nama | Login (email / no. HP) | Kata sandi | Keterangan |
+|---|---|---|---|
+| Member Demo | `demo@alpaka.local` | `Demo-Alpaka-2026` | Akun utama untuk presentasi: riwayat terlengkap. Saldo: total 275, ditahan 60, tersedia 215 |
+| Sari Wulandari | `sari.wulandari@example.com` | `Demo-Alpaka-2026` | |
+| Budi Santoso | `budi.santoso@example.com` | `Demo-Alpaka-2026` | |
+| Dewi Lestari | `6281234500004` (no. HP, tanpa email) | `Demo-Alpaka-2026` | Login pakai nomor HP; format `0812...` atau `+62812...` juga diterima |
+| Rian Pratama | `rian.pratama@example.com` | `Demo-Alpaka-2026` | Poin 250 sedang ditahan untuk redeem |
+| Maya Anggraini | `maya.anggraini@example.com` | `Demo-Alpaka-2026` | |
+| Agus Setiawan | `agus.setiawan@example.com` | `Demo-Alpaka-2026` | |
+| Nina Kusuma | `nina.kusuma@example.com` | `Demo-Alpaka-2026` | Member baru |
 
 Akun member baru dapat dibuat lewat halaman registrasi (`/daftar`); admin baru lewat menu **Kelola Admin**.
 

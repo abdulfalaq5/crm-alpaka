@@ -40,7 +40,10 @@ export function tokenExp(token) {
 /** Header untuk permintaan latar belakang (polling) agar tidak memperpanjang sesi idle. */
 export const BACKGROUND = { headers: { 'X-Background': '1' } };
 
-const api = axios.create({ baseURL: '/api' });
+// VITE_API_URL diisi saat build bila frontend & backend berada di subdomain berbeda
+// (mis. https://dev-api-crm-alpaka.lokatali.my.id/api). Kosongkan untuk pakai proxy relatif '/api'
+// (satu domain, lihat deploy/nginx/alpaka.conf).
+const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api' });
 
 api.interceptors.request.use((config) => {
   const s = session.get();

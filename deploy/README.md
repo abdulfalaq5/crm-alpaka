@@ -11,6 +11,8 @@ cp .env.example .env && chmod 600 .env     # isi DB_*, JWT_SECRET (>=32 karakter
 ```
 Di `.env` production wajib: `NODE_ENV=production`, `FORCE_HTTPS=true`, `CORS_ORIGIN=https://<domain>`, `APP_URL=https://<domain>`.
 
+**Frontend & backend di subdomain terpisah** (mis. `app.example.com` + `api.example.com`, masing-masing dengan nginx/vhost sendiri): set `VITE_API_URL=https://api.example.com/api` sebelum `npm run build` di frontend, dan `CORS_ORIGIN=https://app.example.com` di backend. Tanpa `VITE_API_URL`, frontend memanggil `/api` secara relatif terhadap domain frontend sendiri, sehingga request akan salah arah (ke frontend, bukan backend).
+
 ## 2. Build & jalankan
 ```bash
 cd backend  && npm ci --omit=dev          # migrasi + seeder dasar berjalan otomatis saat start

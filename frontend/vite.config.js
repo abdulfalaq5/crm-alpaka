@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
       },
       chunkSizeWarningLimit: 900,
     },
+    envDir: rootDir,
     resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
     server: {
       port: frontendPort,
