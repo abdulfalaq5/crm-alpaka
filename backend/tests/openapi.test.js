@@ -7,6 +7,7 @@ const MOUNTS = [
   ['/auth', require('../src/routes/auth').router],
   ['/public', require('../src/routes/public').router],
   ['/admin', require('../src/routes/admin').router],
+  ['/integrations/more', require('../src/routes/integrations').router],
   ['', require('../src/routes/member').router],
 ];
 

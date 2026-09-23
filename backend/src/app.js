@@ -8,6 +8,7 @@ const auth = require('./routes/auth');
 const member = require('./routes/member');
 const admin = require('./routes/admin');
 const pub = require('./routes/public');
+const integrations = require('./routes/integrations');
 const { requestLog } = require('./middleware/requestLog');
 const swaggerUi = require('swagger-ui-express');
 const { buildSpec } = require('./docs/openapi');
@@ -55,6 +56,7 @@ function createApp() {
   app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
   app.use('/api/auth', auth.router);
   app.use('/api/public', pub.router);
+  app.use('/api/integrations/more', integrations.router);
   app.use('/api/admin', admin.router);
   app.use('/api', member.router);
 

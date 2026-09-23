@@ -24,3 +24,11 @@ export const MUTATION = {
   lepas: { label: 'Hold Dilepas', sign: '+', color: 'success' },
   koreksi: { label: 'Koreksi Poin', sign: '−', color: 'danger' },
 };
+
+export const VOUCHER_STATUS = {
+  active: { label: 'Aktif', color: 'success' },
+  reserved: { label: 'Dipakai di Checkout', color: 'warning' },
+  used: { label: 'Terpakai', color: 'neutral' },
+  expired: { label: 'Kedaluwarsa', color: 'danger' },
+  void: { label: 'Dibatalkan', color: 'danger' },
+};

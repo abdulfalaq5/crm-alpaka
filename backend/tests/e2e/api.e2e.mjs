@@ -275,8 +275,20 @@ r = await call('GET', '/public/terms');
 check('admin mengubah terms', r.body.data.teks === 'Teks syarat resmi Alpaka (uji).');
 
 // manajemen admin (OI-13)
-r = await call('POST', '/admin/admins', { token: ADM, json: { nama: 'Admin Dua', email: 'dua@alpaka.local', password: 'adminDua-123' } });
-check('buat admin', r.status === 201); const adm2 = r.body.data;
+// role default admin baru = 'viewer' (least privilege); tes di bawah pakai role='super_admin' eksplisit
+// karena skenarionya menguji proteksi self-deactivate/last-admin di endpoint kelola-admin (superOnly).
+r = await call('POST', '/admin/admins', { token: ADM, json: { nama: 'Admin Viewer Default', email: 'viewer-default@alpaka.local', password: 'ViewerDefault-123' } });
+check('admin baru default role viewer', r.status === 201 && r.body.data.role === 'viewer');
+const vtok = (await call('POST', '/auth/admin/login', { json: { identifier: 'viewer-default@alpaka.local', password: 'ViewerDefault-123' } })).body.token;
+r = await call('POST', `/admin/receipts/1/approve`, { token: vtok });
+check('viewer tidak bisa approve struk -> 403', r.status === 403);
+r = await call('GET', '/admin/admins', { token: vtok });
+check('viewer tetap bisa membaca (GET) -> 200', r.status === 200);
+r = await call('POST', '/admin/admins', { token: vtok, json: { nama: 'X', email: 'x@alpaka.local', password: 'rahasia123' } });
+check('viewer tidak bisa membuat admin -> 403', r.status === 403);
+
+r = await call('POST', '/admin/admins', { token: ADM, json: { nama: 'Admin Dua', email: 'dua@alpaka.local', password: 'adminDua-123', role: 'super_admin' } });
+check('buat admin dengan role eksplisit', r.status === 201 && r.body.data.role === 'super_admin'); const adm2 = r.body.data;
 r = await call('POST', '/admin/admins', { token: ADM, json: { nama: 'Dobel', email: 'DUA@alpaka.local', password: 'adminDua-123' } });
 check('email admin duplikat -> 409', r.status === 409);
 r = await call('POST', '/admin/admins', { token: ADM, json: { nama: 'Lemah', email: 'lemah@alpaka.local', password: '123' } });
@@ -299,6 +311,10 @@ check('aktifkan kembali + reset password', r.status === 200);
 await call('PATCH', `/admin/admins/${adm2.id}`, { token: ADM, json: { status: 'nonaktif' } });
 r = await call('PATCH', `/admin/admins/${admin1.id}`, { token: ADM, json: { status: 'nonaktif' } });
 check('admin terakhir/diri sendiri tidak bisa dinonaktifkan (409)', r.status === 409);
+r = await call('PATCH', `/admin/admins/${admin1.id}`, { token: ADM, json: { role: 'viewer' } });
+check('turunkan peran diri sendiri (super admin terakhir) -> 409 LAST_ADMIN', r.status === 409 && r.body.error.code === 'LAST_ADMIN');
+r = await call('PATCH', `/admin/admins/${adm2.id}`, { token: ADM, json: { role: 'approver' } });
+check('ubah peran admin lain', r.status === 200 && r.body.data.role === 'approver');
 
 // manajemen member
 r = await call('GET', '/admin/members?q=ani', { token: ADM });

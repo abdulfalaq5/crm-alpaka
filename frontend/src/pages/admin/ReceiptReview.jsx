@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Alert, Button, Col, Descriptions, Popconfirm, Row, Skeleton, App } from 'antd';
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import api, { errMsg } from '../../api';
+import { useAdminRole } from '../../auth';
 import { useLoad } from '../../hooks';
 import { fmtDate, fmtDateTime, num, rupiah } from '../../format';
 import StatusBadge from '../../components/StatusBadge';
@@ -123,12 +124,16 @@ export default function ReceiptReview() {
                 {r.status === 'menunggu_review' ? (
                   <>
                     <p className="section-label">Keputusan</p>
-                    <div className="actions">
-                      <Popconfirm title="Setujui struk ini?" description="Poin akan dicatat ke member." okText="Setujui" cancelText="Batal" onConfirm={approve}>
-                        <Button type="primary" loading={busy}>Setujui</Button>
-                      </Popconfirm>
-                      <Button danger onClick={() => setRejecting(true)}>Tolak</Button>
-                    </div>
+                    {canWrite ? (
+                      <div className="actions">
+                        <Popconfirm title="Setujui struk ini?" description="Poin akan dicatat ke member." okText="Setujui" cancelText="Batal" onConfirm={approve}>
+                          <Button type="primary" loading={busy}>Setujui</Button>
+                        </Popconfirm>
+                        <Button danger onClick={() => setRejecting(true)}>Tolak</Button>
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>Peran Anda hanya dapat melihat (viewer).</span>
+                    )}
                   </>
                 ) : (
                   <>
@@ -140,7 +145,7 @@ export default function ReceiptReview() {
                       {r.alasan_penolakan && <Descriptions.Item label="Alasan">{r.alasan_penolakan}</Descriptions.Item>}
                       {r.poin_diperoleh && <Descriptions.Item label="Poin diberikan">{num(r.poin_diperoleh)}</Descriptions.Item>}
                     </Descriptions>
-                    <Button style={{ marginTop: 12 }} onClick={() => setCorrecting(true)}>Koreksi keputusan</Button>
+                    {canWrite && <Button style={{ marginTop: 12 }} onClick={() => setCorrecting(true)}>Koreksi keputusan</Button>}
                   </>
                 )}
               </div>

@@ -93,7 +93,7 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', 10);
 /** Verifikasi kredensial + kunci sementara setelah beberapa kali gagal (REG-04, REG-05). */
 async function loginAccount({ table, statusCol, where, param, plain, role }) {
   const { rows } = await pool.query(
-    `SELECT id, nama, email, ${table === 'members' ? 'no_hp,' : ''} password_hash, ${statusCol} AS status,
+    `SELECT id, nama, email, ${table === 'members' ? 'no_hp,' : 'role AS admin_role,'} password_hash, ${statusCol} AS status,
             gagal_login, terkunci_sampai FROM ${table} WHERE ${where}`,
     [param]
   );
@@ -118,7 +118,7 @@ async function loginAccount({ table, statusCol, where, param, plain, role }) {
   if (account.status !== 'aktif') throw new AppError(403, 'Akun tidak aktif', 'ACCOUNT_INACTIVE');
 
   await pool.query(`UPDATE ${table} SET gagal_login = 0, terkunci_sampai = NULL WHERE id = $1`, [account.id]);
-  return { token: signToken(account.id, role), user: { id: account.id, nama: account.nama, email: account.email, no_hp: account.no_hp || null, role } };
+  return { token: signToken(account.id, role), user: { id: account.id, nama: account.nama, email: account.email, no_hp: account.no_hp || null, role, admin_role: account.admin_role || null } };
 }
 
 const loginSchema = Joi.object({
@@ -162,7 +162,7 @@ router.get(
   authenticate(),
   asyncHandler(async (req, res) => {
     const table = req.user.role === 'admin' ? 'admins' : 'members';
-    const cols = req.user.role === 'admin' ? 'id, nama, email' : 'id, nama, email, no_hp, notif_email, notif_whatsapp';
+    const cols = req.user.role === 'admin' ? 'id, nama, email, role AS admin_role' : 'id, nama, email, no_hp, notif_email, notif_whatsapp';
     const { rows } = await pool.query(`SELECT ${cols} FROM ${table} WHERE id = $1`, [req.user.id]);
     res.json({ user: { ...rows[0], role: req.user.role } });
   })

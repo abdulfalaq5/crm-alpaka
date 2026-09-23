@@ -1,29 +1,33 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Badge, Button, Layout, Menu } from 'antd';
-import { AuditOutlined, FileDoneOutlined, GiftOutlined, LogoutOutlined, SafetyOutlined, SettingOutlined, SwapOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { useAuth } from '../auth';
+import { AuditOutlined, CrownOutlined, DashboardOutlined, FileDoneOutlined, GiftOutlined, LogoutOutlined, SafetyOutlined, SettingOutlined, SwapOutlined, TagOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useAuth, useAdminRole } from '../auth';
 import { useLoad } from '../hooks';
 
 // Panel admin: tema sama, layout khas dashboard dengan sidebar (B0).
 export default function AdminLayout() {
   const { user, signOut } = useAuth();
+  const { isSuperAdmin } = useAdminRole();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { data } = useLoad('/admin/summary', undefined, [pathname]);
 
   const items = [
+    { key: '/admin', icon: <DashboardOutlined />, label: <Link to="/admin">Dashboard</Link> },
     { key: '/admin/struk', icon: <FileDoneOutlined />, label: <Link to="/admin/struk">Antrean Struk <Badge count={data?.data.struk.menunggu_review || 0} size="small" /></Link> },
     { key: '/admin/redeem', icon: <SwapOutlined />, label: <Link to="/admin/redeem">Antrean Redeem <Badge count={data?.data.redeem.menunggu_persetujuan || 0} size="small" /></Link> },
-    { key: '/admin/auto-approve', icon: <ThunderboltOutlined />, label: <Link to="/admin/auto-approve">Pengaturan Auto-Approve</Link> },
+    { key: '/admin/tier', icon: <CrownOutlined />, label: <Link to="/admin/tier">Tier</Link> },
+    { key: '/admin/voucher', icon: <TagOutlined />, label: <Link to="/admin/voucher">Voucher</Link> },
+    ...(isSuperAdmin ? [{ key: '/admin/auto-approve', icon: <ThunderboltOutlined />, label: <Link to="/admin/auto-approve">Pengaturan Auto-Approve</Link> }] : []),
     { key: '/admin/pengaturan', icon: <SettingOutlined />, label: <Link to="/admin/pengaturan">Pengaturan Program</Link> },
     { key: '/admin/reward', icon: <GiftOutlined />, label: <Link to="/admin/reward">Reward</Link> },
     { key: '/admin/member', icon: <TeamOutlined />, label: <Link to="/admin/member">Member</Link> },
     { key: '/admin/kelola-admin', icon: <SafetyOutlined />, label: <Link to="/admin/kelola-admin">Kelola Admin</Link> },
     { key: '/admin/audit', icon: <AuditOutlined />, label: <Link to="/admin/audit">Log Audit</Link> },
   ];
-  const selected = items.map((i) => i.key).filter((k) => pathname.startsWith(k));
+  const selected = items.map((i) => i.key).filter((k) => (k === '/admin' ? pathname === '/admin' : pathname.startsWith(k)));
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

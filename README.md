@@ -10,9 +10,10 @@ Rencana lengkap: [BACKEND.md](BACKEND.md) dan [FRONTEND.md](FRONTEND.md).
 
 ## Fitur
 
-- **Member Portal** — registrasi & login, upload struk (JPG/PNG/PDF), riwayat & detail struk, pengajuan ulang struk yang ditolak, dashboard saldo poin (total / ditahan / tersedia) + mutasi poin, redeem reward, notifikasi in-app, profil.
-- **Admin Panel** (`/admin`) — antrean & review struk (setujui / tolak + alasan), antrean & review redeem (catat detail pemberian), pengaturan auto-approve, pengaturan program (konversi poin, masa klaim, batas file, channel), manajemen reward, log audit (read-only).
-- **Aturan yang ditegakkan di server** — RBAC member/admin, validasi otomatis (kelengkapan, duplikat, tanggal, nominal), poin idempotent (unique constraint), perubahan saldo dalam transaksi atomik dengan row lock, log audit immutable (trigger database), file bukti tidak publik (hanya pemilik & admin), rate limit + penguncian akun setelah 5 kali gagal login, sesi berakhir otomatis bila tidak aktif.
+- **Member Portal** — registrasi & login, upload struk (JPG/PNG/PDF), riwayat & detail struk, pengajuan ulang struk yang ditolak, dashboard saldo poin (total / ditahan / tersedia) + mutasi poin, **tier & progress**, redeem reward (filter tier & stok), **voucher** (kode otomatis + masa berlaku), notifikasi in-app, profil (+ preferensi kanal notifikasi).
+- **Admin Panel** (`/admin`) — dashboard metrik, antrean & review struk (setujui / tolak / **koreksi keputusan** + alasan), antrean & review redeem, pengaturan auto-approve, pengaturan program (konversi poin, masa klaim, batas file, channel, **aturan poin per channel**), manajemen reward (+ stok, tier minimum, masa berlaku, gambar), **manajemen tier**, **monitoring & void voucher**, manajemen member (aktif/nonaktif, **penyesuaian poin manual**), kelola admin (**RBAC**: super_admin/approver/viewer), export CSV, log audit (read-only).
+- **Integrasi More by Morello** (`/api/integrations/more/*`) — webhook transaksi → poin otomatis, validasi & konfirmasi voucher saat checkout. Autentikasi API key, idempotent, tercatat di log integrasi. Lihat [Integrasi More by Morello](#integrasi-more-by-morello).
+- **Aturan yang ditegakkan di server** — RBAC member/admin (3 peran), validasi otomatis (kelengkapan, duplikat, tanggal, nominal), poin idempotent (unique constraint), perubahan saldo dalam transaksi atomik dengan row lock, log audit immutable (trigger database), file bukti tidak publik (hanya pemilik & admin), rate limit + penguncian akun setelah 5 kali gagal login, sesi berakhir otomatis bila tidak aktif dan dicabut seketika saat nonaktif/ganti password.
 
 ## Dokumentasi API (Swagger)
 
@@ -71,6 +72,25 @@ cd frontend && npm run build     # build produksi ke frontend/dist
   APP_URL=http://localhost:9732 node tests/e2e/ui.e2e.mjs
   ```
   Setelah selesai: hentikan proses uji, `dropdb db_crm_alpaka_test`, hapus `backend/uploads_test` dan `backend/logs_test`.
+
+## Tier, Voucher & RBAC
+
+- **Tier** dievaluasi otomatis dari **total poin lifetime** (poin masuk dikurangi koreksi — **tidak** berkurang saat redeem) setiap kali poin bertambah. Default: Bronze (0) / Silver (100) / Gold (300) / Platinum (800), poin dan nama dapat diubah admin di menu **Tier**. Riwayat naik/turun tercatat di `member_tier_history`.
+- **Voucher** diterbitkan otomatis (kode `ALP-XXXXXXXX`) saat admin menyetujui redeem, dengan masa berlaku per reward (`berlaku_hari`, default 30 hari). Status: `active` → `reserved` (saat validasi checkout) → `used` / kembali `active` (reservasi lewat waktu) / `expired` / `void` (dibatalkan admin). Reservasi dan voucher kedaluwarsa dibersihkan otomatis setiap `MAINTENANCE_INTERVAL_MINUTES` menit (default 10).
+- **Reward** kini mendukung stok (opsional, tanpa batas bila kosong), syarat tier minimum, dan masa tampil (`valid_from`/`valid_until`).
+- **RBAC admin** — `super_admin` (semua akses termasuk pengaturan & kelola admin), `approver` (operasional: review struk/redeem, kelola reward/voucher/member, tanpa akses pengaturan sistem), `viewer` (hanya baca). Admin baru dari menu **Kelola Admin** default `viewer`; atur perannya dari halaman yang sama. Server menegakkan lewat `middleware/adminRole.js`; UI menyembunyikan aksi yang tidak berhak, tapi tidak menggantikan penegakan server.
+- **Penyesuaian poin manual** (menu **Member** → Sesuaikan Poin) mencatat ke `point_adjustments` + `points_ledger` dan ikut memicu evaluasi ulang tier. Pengurangan ditolak bila melebihi saldo tersedia.
+
+## Integrasi More by Morello
+
+Implementasi **default** (tambahan.md poin 4 & 5) agar sistem langsung dapat menerima transaksi tanpa menunggu kontrak API resmi dari tim More — sesuaikan payload di `backend/src/routes/integrations.js` begitu spesifikasi mereka dikonfirmasi.
+
+- **Aktivasi:** isi `MORE_API_KEY` di `.env` (kosong = seluruh endpoint `/api/integrations/more/*` menolak dengan 403). Autentikasi lewat header `X-Api-Key`, dibandingkan dengan `timingSafeEqual`.
+- **`POST /api/integrations/more/transaction`** — transaksi selesai di More langsung dicatat sebagai struk `disetujui` (tanpa antre review, tanpa file bukti) dan poin diberikan otomatis. `external_id` dipakai sebagai idempotency key: request dengan `external_id` yang sama tidak diproses dua kali (aman terhadap retry webhook). Member dicari lewat `email`/`no_hp`; **member yang belum terdaftar ditolak secara default** (422 `MEMBER_NOT_FOUND`) — OI terbuka, ubah lewat `MORE_AUTO_REGISTER` bila Client memutuskan auto-register.
+- **`POST /api/integrations/more/voucher/validate`** — memvalidasi kode voucher saat checkout dan mereservasinya (`MORE_VOUCHER_RESERVE_MINUTES` menit, default 15) agar tidak terpakai dua kali.
+- **`POST /api/integrations/more/voucher/redeem`** — dipanggil setelah checkout sukses untuk menandai voucher `used`. Bila checkout gagal, jangan panggil endpoint ini — reservasi otomatis lepas kembali setelah waktu reservasi habis.
+- Semua request (berhasil maupun gagal) tercatat di tabel `integration_logs`, dapat dilihat admin di menu **Log Audit** → API `/admin/integration-logs`, untuk audit & troubleshooting.
+- Detail lengkap tiap endpoint (payload, response, kode error) ada di Swagger (`/api/docs`, tag **Integrasi More**).
 
 ## Catatan operasional
 

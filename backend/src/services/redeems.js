@@ -2,11 +2,13 @@ const { pool, withTransaction } = require('../db/pool');
 const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const { getBalance, lockMember, addEntry } = require('./points');
+const vouchers = require('./vouchers');
 const { notFound, conflict, unprocessable } = require('../utils/http');
 
 const COLS = `
   d.id, d.member_id, d.reward_id, w.nama AS reward_nama, d.jumlah_poin, d.status,
-  d.alasan_penolakan, d.detail_pemberian, d.waktu_keputusan, d.created_at`;
+  d.alasan_penolakan, d.detail_pemberian, d.waktu_keputusan, d.created_at,
+  v.kode AS voucher_kode, v.status AS voucher_status, v.expires_at AS voucher_kedaluwarsa`;
 
 /** Ajukan redeem: saldo tersedia dicek, lalu poin di-hold dalam satu transaksi atomik (RDM-01..03, BR-09). */
 async function createRedeem({ memberId, rewardId }) {
@@ -17,6 +19,21 @@ async function createRedeem({ memberId, rewardId }) {
     const { rows: rw } = await client.query('SELECT * FROM rewards WHERE id = $1 AND aktif = TRUE', [rewardId]);
     if (!rw.length) throw notFound('Reward tidak ditemukan atau tidak aktif');
     const reward = rw[0];
+    if (reward.stok !== null && reward.stok <= 0) throw unprocessable('Stok reward ini sudah habis.', { reward_id: 'Stok habis' });
+    if (reward.valid_from && new Date(reward.valid_from) > new Date()) throw unprocessable('Reward ini belum tersedia.', { reward_id: 'Belum tersedia' });
+    if (reward.valid_until && new Date(reward.valid_until) < new Date()) throw unprocessable('Reward ini sudah tidak berlaku.', { reward_id: 'Sudah tidak berlaku' });
+    if (reward.tier_minimum_id) {
+      const { rows: chk } = await client.query(
+        `SELECT COALESCE(mt.urutan, -1) >= rt.urutan AS memenuhi
+           FROM tiers rt LEFT JOIN members m ON m.id = $2 LEFT JOIN tiers mt ON mt.id = m.current_tier_id
+          WHERE rt.id = $1`,
+        [reward.tier_minimum_id, memberId]
+      );
+      if (!chk[0]?.memenuhi) {
+        const { rows: rt } = await client.query('SELECT nama FROM tiers WHERE id = $1', [reward.tier_minimum_id]);
+        throw unprocessable(`Reward ini khusus member tier ${rt[0].nama} ke atas.`, { reward_id: 'Tier belum memenuhi syarat' });
+      }
+    }
 
     const saldo = await getBalance(client, memberId);
     if (saldo.tersedia < reward.poin_dibutuhkan) {
@@ -26,6 +43,10 @@ async function createRedeem({ memberId, rewardId }) {
       );
     }
 
+    if (reward.stok !== null) {
+      const { rowCount } = await client.query('UPDATE rewards SET stok = stok - 1 WHERE id = $1 AND stok > 0', [reward.id]);
+      if (!rowCount) throw unprocessable('Stok reward ini sudah habis.', { reward_id: 'Stok habis' });
+    }
     const { rows } = await client.query(
       `INSERT INTO redeems (member_id, reward_id, jumlah_poin, status)
        VALUES ($1, $2, $3, 'menunggu_persetujuan') RETURNING id`,
@@ -59,7 +80,7 @@ async function getRedeem(id, { memberId = null, admin = false } = {}) {
   const { rows } = await pool.query(
     `SELECT ${COLS}${extra}
        FROM redeems d JOIN rewards w ON w.id = d.reward_id JOIN members m ON m.id = d.member_id
-       LEFT JOIN admins a ON a.id = d.diputuskan_oleh
+       LEFT JOIN admins a ON a.id = d.diputuskan_oleh LEFT JOIN vouchers v ON v.redeem_id = d.id
       WHERE ${where}`,
     params
   );
@@ -77,7 +98,7 @@ async function listRedeems({ memberId = null, status = null, q = null, paginatio
     where.push(`(m.nama ILIKE $${params.length} OR m.email ILIKE $${params.length} OR w.nama ILIKE $${params.length})`);
   }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const from = 'FROM redeems d JOIN rewards w ON w.id = d.reward_id JOIN members m ON m.id = d.member_id';
+  const from = 'FROM redeems d JOIN rewards w ON w.id = d.reward_id JOIN members m ON m.id = d.member_id LEFT JOIN vouchers v ON v.redeem_id = d.id';
 
   const { rows: count } = await pool.query(`SELECT COUNT(*)::int AS total ${from} ${clause}`, params);
   const { rows } = await pool.query(
@@ -133,8 +154,17 @@ async function transition({ id, to, actor, memberId = null, alasan = null, detai
       referensiId: id,
     });
 
-    const { rows: rw } = await client.query('SELECT nama FROM rewards WHERE id = $1', [redeem.reward_id]);
+    const { rows: rw } = await client.query('SELECT * FROM rewards WHERE id = $1', [redeem.reward_id]);
     const reward = rw[0].nama;
+    if (to !== 'selesai') {
+      // ditolak/dibatalkan: stok yang tadi dikurangi saat pengajuan dikembalikan
+      await client.query('UPDATE rewards SET stok = stok + 1 WHERE id = $1 AND stok IS NOT NULL', [redeem.reward_id]);
+    }
+
+    let voucher = null;
+    if (to === 'selesai') {
+      voucher = await vouchers.issueForRedeem(client, { redeemId: id, memberId: redeem.member_id, reward: rw[0] });
+    }
     const aksi = { selesai: 'redeem.setujui', ditolak: 'redeem.tolak', dibatalkan: 'redeem.batalkan' }[to];
     await audit(client, {
       pelakuTipe: actor.tipe, pelakuId: actor.id, aksi, objekTipe: 'redeem', objekId: id,
@@ -144,7 +174,7 @@ async function transition({ id, to, actor, memberId = null, alasan = null, detai
     if (to === 'selesai') {
       await notify(client, {
         memberId: redeem.member_id, jenis: 'redeem_disetujui', referensiTipe: 'redeem', referensiId: id,
-        isi: `Redeem "${reward}" disetujui.${detail ? ` Detail: ${detail}` : ''}`,
+        isi: `Redeem "${reward}" disetujui. Kode voucher Anda: ${voucher.kode} (berlaku sampai ${new Date(voucher.expires_at).toLocaleDateString('id-ID')}).${detail ? ` Catatan: ${detail}` : ''}`,
       });
     } else if (to === 'ditolak') {
       await notify(client, {

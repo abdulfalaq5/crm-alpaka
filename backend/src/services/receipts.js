@@ -271,4 +271,46 @@ async function decideReceipt({ id, adminId, approve, alasan }) {
   return getReceipt(id, { admin: true });
 }
 
-module.exports = { submitReceipt, getReceipt, listReceipts, queueSummary, decideReceipt };
+/**
+ * Struk otomatis dari integrasi (More by Morello, tambahan.md poin 4): transaksi sudah "paid/completed"
+ * di sisi mereka, jadi langsung dicatat `disetujui` tanpa antre review manual maupun file bukti.
+ * `nomorTransaksi` dipakai sebagai `external_id` sekaligus — constraint unik channel+nomor_transaksi
+ * yang sudah ada di skema menjadi idempotency key alami (request yang sama tidak diproses dua kali).
+ */
+async function submitFromIntegration({ memberId, channel, nomorTransaksi, tanggal, nominal }) {
+  if (!(nominal > 0)) throw unprocessable('Nominal transaksi harus lebih dari nol', { nominal: 'Nominal tidak valid' });
+  const tgl = new Date(`${tanggal}T00:00:00Z`);
+  if (Number.isNaN(tgl.getTime())) throw unprocessable('Format tanggal transaksi tidak valid', { tanggal: 'Tidak valid' });
+  if (tgl.getTime() > Date.now()) throw unprocessable('Tanggal transaksi tidak boleh di masa depan', { tanggal: 'Di masa depan' });
+
+  return withTransaction(async (client) => {
+    let receiptId;
+    try {
+      const { rows } = await client.query(
+        `INSERT INTO receipts (member_id, channel, nomor_transaksi, tanggal_transaksi, nominal, status,
+                               hasil_validasi, mode_persetujuan, waktu_keputusan, sumber, external_id)
+         VALUES ($1, $2, $3, $4, $5, 'disetujui', '{"lulus": true, "checks": {}}', 'otomatis', now(), 'integrasi', $3)
+         RETURNING id`,
+        [memberId, channel, nomorTransaksi, tanggal, nominal]
+      );
+      receiptId = rows[0].id;
+    } catch (err) {
+      if (err.code === '23505') throw conflict('Transaksi dengan external_id ini sudah pernah diproses.', 'DUPLICATE');
+      throw err;
+    }
+    const { rows: current } = await client.query('SELECT * FROM receipts WHERE id = $1', [receiptId]);
+    const receipt = current[0];
+    const poin = await awardForReceipt(client, receipt);
+    await audit(client, {
+      pelakuTipe: 'sistem', aksi: 'struk.integrasi_otomatis', objekTipe: 'receipt', objekId: receiptId,
+      detail: { poin, channel, external_id: nomorTransaksi },
+    });
+    await notify(client, {
+      memberId, jenis: 'struk_disetujui', referensiTipe: 'receipt', referensiId: receiptId,
+      isi: `Transaksi ${nomorTransaksi} di ${channel} tercatat.${poin ? ` Anda mendapat ${poin} poin.` : ''}`,
+    });
+    return { receiptId, poin };
+  });
+}
+
+module.exports = { submitReceipt, submitFromIntegration, getReceipt, listReceipts, queueSummary, decideReceipt };

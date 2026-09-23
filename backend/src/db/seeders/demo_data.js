@@ -15,6 +15,7 @@ const bcrypt = require('bcryptjs');
 const { config } = require('../../config');
 const { validateReceipt, todayIn } = require('../../services/receiptValidation');
 const { hitungPoin } = require('../../services/points');
+const tiersService = require('../../services/tiers');
 const { makeReceiptPdf, makeReceiptPng } = require('../demo/files');
 
 const PASSWORD = 'Demo-Alpaka-2026';
@@ -297,6 +298,7 @@ async function run(db, log) {
     for (const key of Object.keys(MEMBERS)) {
       const tersedia = (earned[key] || 0) - (spent[key] || 0) - (held[key] || 0);
       if (tersedia < 0) throw new Error(`Data demo tidak konsisten: saldo ${key} negatif (${tersedia})`);
+      await tiersService.reevaluate(client, mid[key]); // tier dihitung dari ledger yang baru dibuat di atas
     }
 
     // ---- reset password (satu terpakai, satu kedaluwarsa) ----

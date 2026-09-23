@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Alert, Button, Descriptions, Skeleton, App } from 'antd';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
+import { useAdminRole } from '../../auth';
 import { fmtDateTime, num } from '../../format';
 import StatusBadge from '../../components/StatusBadge';
 import ReasonModal from '../../components/ReasonModal';
@@ -11,6 +12,7 @@ import ReasonModal from '../../components/ReasonModal';
 export default function RedeemReview() {
   const { message } = App.useApp();
   const { id } = useParams();
+  const { canWrite } = useAdminRole();
   const { data, loading, error, reload } = useLoad(`/admin/redeems/${id}`);
   const [mode, setMode] = useState(null); // 'approve' | 'reject'
   const r = data?.data;
@@ -48,12 +50,14 @@ export default function RedeemReview() {
               {r.detail_pemberian && <Descriptions.Item label="Detail pemberian">{r.detail_pemberian}</Descriptions.Item>}
               {r.alasan_penolakan && <Descriptions.Item label="Alasan penolakan">{r.alasan_penolakan}</Descriptions.Item>}
             </Descriptions>
-            {r.status === 'menunggu_persetujuan' && (
+            {r.status === 'menunggu_persetujuan' && (canWrite ? (
               <div className="actions" style={{ marginTop: 16 }}>
                 <Button type="primary" onClick={() => setMode('approve')}>Setujui</Button>
                 <Button danger onClick={() => setMode('reject')}>Tolak</Button>
               </div>
-            )}
+            ) : (
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>Peran Anda hanya dapat melihat (viewer).</span>
+            ))}
           </div>
           <ReasonModal
             open={mode === 'approve'}

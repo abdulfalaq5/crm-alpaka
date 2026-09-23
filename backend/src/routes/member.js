@@ -6,6 +6,8 @@ const { authenticate } = require('../middleware/auth');
 const { getBalance } = require('../services/points');
 const { getSettings, getPointRule } = require('../services/settings');
 const receipts = require('../services/receipts');
+const tiersService = require('../services/tiers');
+const vouchersService = require('../services/vouchers');
 const redeems = require('../services/redeems');
 const { receiptUpload, filePath } = require('../services/files');
 const { signToken } = require('../middleware/auth');
@@ -113,6 +115,23 @@ router.get('/receipts/:id/files/:fileId', asyncHandler((req, res) => sendReceipt
 // ---- Poin & dashboard (PNT, DSH) ----
 router.get('/member/points', asyncHandler(async (req, res) => res.json({ data: await getBalance(pool, req.user.id) })));
 
+// ---- Tier & Progress (tambahan.md poin 1) ----
+router.get(
+  '/member/tier',
+  asyncHandler(async (req, res) => {
+    const [tiers, poin] = await Promise.all([tiersService.listTiers(pool), tiersService.lifetimePoints(pool, req.user.id)]);
+    res.json({ data: { ...tiersService.progress(tiers, poin), semua_tier: tiers } });
+  })
+);
+
+// ---- Voucher (tambahan.md poin 3) ----
+router.get(
+  '/member/vouchers',
+  asyncHandler(async (req, res) => {
+    res.json(await vouchersService.listVouchers({ memberId: req.user.id, status: req.query.status, pagination: parsePagination(req.query) }));
+  })
+);
+
 router.get(
   '/member/points/mutations',
   asyncHandler(async (req, res) => {
@@ -155,10 +174,28 @@ router.get(
 router.get(
   '/rewards',
   asyncHandler(async (req, res) => {
+    // Katalog reward (tambahan.md poin 2): hanya aktif, dalam masa berlaku, dan stok belum habis; tier ditampilkan untuk info.
     const { rows } = await pool.query(
-      'SELECT id, nama, deskripsi, poin_dibutuhkan, gambar_file FROM rewards WHERE aktif = TRUE ORDER BY poin_dibutuhkan, id'
+      `SELECT r.id, r.nama, r.deskripsi, r.poin_dibutuhkan, r.gambar_file, r.stok, r.valid_until,
+              r.tier_minimum_id, t.nama AS tier_minimum_nama, t.urutan AS tier_minimum_urutan, t2.urutan AS urutan_member
+         FROM rewards r
+         LEFT JOIN tiers t ON t.id = r.tier_minimum_id
+         LEFT JOIN members m ON m.id = $1
+         LEFT JOIN tiers t2 ON t2.id = m.current_tier_id
+        WHERE r.aktif = TRUE
+          AND (r.stok IS NULL OR r.stok > 0)
+          AND (r.valid_from IS NULL OR r.valid_from <= CURRENT_DATE)
+          AND (r.valid_until IS NULL OR r.valid_until >= CURRENT_DATE)
+        ORDER BY r.poin_dibutuhkan, r.id`,
+      [req.user.id]
     );
-    res.json({ data: rows.map(({ gambar_file, ...r }) => ({ ...r, gambar_url: imageUrl({ ...r, gambar_file }) })) });
+    res.json({
+      data: rows.map(({ gambar_file, tier_minimum_urutan, urutan_member, ...r }) => ({
+        ...r,
+        gambar_url: imageUrl({ ...r, gambar_file }),
+        memenuhi_tier: !r.tier_minimum_id || (urutan_member ?? -1) >= tier_minimum_urutan,
+      })),
+    });
   })
 );
 

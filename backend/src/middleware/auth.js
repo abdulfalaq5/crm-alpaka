@@ -11,7 +11,7 @@ function signToken(id, role) {
 
 const TABLES = {
   member: { sql: 'SELECT id, nama, status_akun AS status, extract(epoch from sesi_valid_sejak) AS valid_sejak FROM members WHERE id = $1' },
-  admin: { sql: 'SELECT id, nama, status, extract(epoch from sesi_valid_sejak) AS valid_sejak FROM admins WHERE id = $1' },
+  admin: { sql: 'SELECT id, nama, status, role, extract(epoch from sesi_valid_sejak) AS valid_sejak FROM admins WHERE id = $1' },
 };
 
 /**
@@ -41,7 +41,7 @@ function authenticate(...roles) {
     // Token yang terbit sebelum ganti password / reset / pencabutan sesi tidak berlaku lagi.
     if (account.valid_sejak && payload.iat < Math.floor(Number(account.valid_sejak))) throw unauthorized();
 
-    req.user = { id: account.id, nama: account.nama, role: payload.role };
+    req.user = { id: account.id, nama: account.nama, role: payload.role, adminRole: account.role || null };
 
     const remaining = payload.exp - Math.floor(Date.now() / 1000);
     // Permintaan latar belakang (mis. polling lonceng, header X-Background: 1) tidak memperpanjang sesi idle.

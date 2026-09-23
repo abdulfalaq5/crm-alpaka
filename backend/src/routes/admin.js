@@ -12,6 +12,14 @@ const bcrypt = require('bcryptjs');
 const { correctReceipt } = require('../services/corrections');
 const { rewardImageUpload, saveRewardImage, removeRewardImage, imageUrl } = require('../services/rewardImages');
 const { conflict } = require('../utils/http');
+const { writeAccess, superOnly } = require('../middleware/adminRole');
+const tiersService = require('../services/tiers');
+const vouchersService = require('../services/vouchers');
+const { manualAdjustment } = require('../services/points');
+const { getBalance } = require('../services/points');
+const metrics = require('../services/metrics');
+const { sendCsv } = require('../utils/csv');
+const { getSettings, getPointRule, listChannelPointRules } = require('../services/settings');
 
 const router = express.Router();
 router.use(authenticate('admin'));
@@ -40,6 +48,7 @@ router.get('/receipts/:id/files/:fileId', asyncHandler((req, res) => sendReceipt
 
 router.post(
   '/receipts/:id/approve',
+  writeAccess,
   asyncHandler(async (req, res) => {
     res.json({ data: await receipts.decideReceipt({ id: req.params.id, adminId: req.user.id, approve: true }) });
   })
@@ -47,6 +56,7 @@ router.post(
 
 router.post(
   '/receipts/:id/reject',
+  writeAccess,
   asyncHandler(async (req, res) => {
     const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan penolakan wajib diisi', 'string.empty': 'Alasan penolakan wajib diisi', 'string.min': 'Alasan penolakan terlalu pendek' }) }), req.body);
     res.json({ data: await receipts.decideReceipt({ id: req.params.id, adminId: req.user.id, approve: false, alasan: v.alasan }) });
@@ -55,6 +65,7 @@ router.post(
 
 router.post(
   '/receipts/:id/correct',
+  writeAccess,
   asyncHandler(async (req, res) => {
     const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan koreksi wajib diisi', 'string.empty': 'Alasan koreksi wajib diisi', 'string.min': 'Alasan koreksi terlalu pendek' }) }), req.body);
     res.json({ data: await correctReceipt({ id: req.params.id, adminId: req.user.id, alasan: v.alasan }) });
@@ -73,6 +84,7 @@ router.get('/redeems/:id', asyncHandler(async (req, res) => res.json({ data: awa
 
 router.post(
   '/redeems/:id/approve',
+  writeAccess,
   asyncHandler(async (req, res) => {
     const v = validate(Joi.object({ detail_pemberian: Joi.string().trim().max(1000).allow('', null) }), req.body);
     res.json({ data: await redeems.approveRedeem({ id: req.params.id, adminId: req.user.id, detail: v.detail_pemberian || null }) });
@@ -81,6 +93,7 @@ router.post(
 
 router.post(
   '/redeems/:id/reject',
+  writeAccess,
   asyncHandler(async (req, res) => {
     const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan penolakan wajib diisi', 'string.empty': 'Alasan penolakan wajib diisi', 'string.min': 'Alasan penolakan terlalu pendek' }) }), req.body);
     res.json({ data: await redeems.rejectRedeem({ id: req.params.id, adminId: req.user.id, alasan: v.alasan }) });
@@ -106,6 +119,7 @@ const autoApproveSchema = Joi.object({
 
 router.put(
   '/auto-approve',
+  superOnly,
   asyncHandler(async (req, res) => {
     const v = validate(autoApproveSchema, req.body);
     await withTransaction(async (client) => {
@@ -144,13 +158,13 @@ const settingsSchema = Joi.object({
 router.get(
   '/settings',
   asyncHandler(async (req, res) => {
-    const { getSettings, getPointRule } = require('../services/settings');
     res.json({ data: { ...(await getSettings(pool)), point_rule: await getPointRule(pool) } });
   })
 );
 
 router.put(
   '/settings',
+  superOnly,
   asyncHandler(async (req, res) => {
     const v = validate(settingsSchema, req.body);
     const { point_rule: rule, ...rest } = v;
@@ -169,7 +183,6 @@ router.put(
       }
       await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'pengaturan.program', objekTipe: 'pengaturan', detail: v });
     });
-    const { getSettings, getPointRule } = require('../services/settings');
     res.json({ data: { ...(await getSettings(pool)), point_rule: await getPointRule(pool) } });
   })
 );
@@ -180,21 +193,35 @@ const rewardSchema = Joi.object({
   deskripsi: Joi.string().trim().max(500).allow('', null),
   poin_dibutuhkan: Joi.number().integer().min(1).max(100000000).required().messages({ 'any.required': 'Poin wajib diisi', 'number.base': 'Poin harus berupa angka' }),
   aktif: Joi.boolean().default(true),
+  stok: Joi.number().integer().min(0).allow(null), // kosong/null = tanpa batas (tambahan.md poin 2)
+  tier_minimum_id: Joi.number().integer().allow(null),
+  valid_from: Joi.date().iso().allow(null, ''),
+  valid_until: Joi.date().iso().allow(null, ''),
+  berlaku_hari: Joi.number().integer().min(1).max(3650).default(30), // masa berlaku voucher setelah redeem disetujui
 });
 
-const withImage = ({ gambar_file, gambar_mime, ...r }) => ({ ...r, gambar_url: imageUrl({ ...r, gambar_file }) });
+const withImage = ({ gambar_file, gambar_mime, ...r }) => ({
+  ...r,
+  gambar_url: imageUrl({ ...r, gambar_file }),
+  status_stok: r.stok === null ? null : r.stok > 0 ? 'tersedia' : 'habis',
+});
 
 router.get('/rewards', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM rewards ORDER BY aktif DESC, poin_dibutuhkan, id');
+  const { rows } = await pool.query(
+    `SELECT r.*, t.nama AS tier_minimum_nama FROM rewards r LEFT JOIN tiers t ON t.id = r.tier_minimum_id ORDER BY r.aktif DESC, r.poin_dibutuhkan, r.id`
+  );
   res.json({ data: rows.map(withImage) });
 }));
 
-router.post('/rewards', asyncHandler(async (req, res) => {
+const rewardValues = (v) => [v.nama, v.deskripsi || null, v.poin_dibutuhkan, v.aktif, v.stok ?? null, v.tier_minimum_id || null, v.valid_from || null, v.valid_until || null, v.berlaku_hari];
+
+router.post('/rewards', writeAccess, asyncHandler(async (req, res) => {
   const v = validate(rewardSchema, req.body);
   const row = await withTransaction(async (client) => {
     const { rows } = await client.query(
-      'INSERT INTO rewards (nama, deskripsi, poin_dibutuhkan, aktif) VALUES ($1, $2, $3, $4) RETURNING *',
-      [v.nama, v.deskripsi || null, v.poin_dibutuhkan, v.aktif]
+      `INSERT INTO rewards (nama, deskripsi, poin_dibutuhkan, aktif, stok, tier_minimum_id, valid_from, valid_until, berlaku_hari)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      rewardValues(v)
     );
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'reward.buat', objekTipe: 'reward', objekId: rows[0].id, detail: v });
     return rows[0];
@@ -202,12 +229,13 @@ router.post('/rewards', asyncHandler(async (req, res) => {
   res.status(201).json({ data: withImage(row) });
 }));
 
-router.put('/rewards/:id', asyncHandler(async (req, res) => {
+router.put('/rewards/:id', writeAccess, asyncHandler(async (req, res) => {
   const v = validate(rewardSchema, req.body);
   const row = await withTransaction(async (client) => {
     const { rows } = await client.query(
-      'UPDATE rewards SET nama = $2, deskripsi = $3, poin_dibutuhkan = $4, aktif = $5 WHERE id = $1 RETURNING *',
-      [req.params.id, v.nama, v.deskripsi || null, v.poin_dibutuhkan, v.aktif]
+      `UPDATE rewards SET nama=$2, deskripsi=$3, poin_dibutuhkan=$4, aktif=$5, stok=$6, tier_minimum_id=$7, valid_from=$8, valid_until=$9, berlaku_hari=$10
+        WHERE id=$1 RETURNING *`,
+      [req.params.id, ...rewardValues(v)]
     );
     if (!rows.length) throw notFound('Reward tidak ditemukan');
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'reward.ubah', objekTipe: 'reward', objekId: rows[0].id, detail: v });
@@ -217,7 +245,7 @@ router.put('/rewards/:id', asyncHandler(async (req, res) => {
 }));
 
 // Gambar reward (OI-09): unggah/ganti dan hapus.
-router.post('/rewards/:id/image', rewardImageUpload, asyncHandler(async (req, res) => {
+router.post('/rewards/:id/image', writeAccess, rewardImageUpload, asyncHandler(async (req, res) => {
   const { rows: cur } = await pool.query('SELECT gambar_file FROM rewards WHERE id = $1', [req.params.id]);
   if (!cur.length) throw notFound('Reward tidak ditemukan');
   const saved = await saveRewardImage(req.file);
@@ -227,7 +255,7 @@ router.post('/rewards/:id/image', rewardImageUpload, asyncHandler(async (req, re
   res.json({ data: withImage(rows[0]) });
 }));
 
-router.delete('/rewards/:id/image', asyncHandler(async (req, res) => {
+router.delete('/rewards/:id/image', writeAccess, asyncHandler(async (req, res) => {
   const { rows: cur } = await pool.query('SELECT gambar_file FROM rewards WHERE id = $1', [req.params.id]);
   if (!cur.length) throw notFound('Reward tidak ditemukan');
   await pool.query('UPDATE rewards SET gambar_file = NULL, gambar_mime = NULL WHERE id = $1', [req.params.id]);
@@ -237,25 +265,27 @@ router.delete('/rewards/:id/image', asyncHandler(async (req, res) => {
 
 // ---- Manajemen admin (OI-13): semua admin berhak akses penuh; tidak ada peran bertingkat di Fase 1 ----
 router.get('/admins', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT id, nama, email, status, created_at FROM admins ORDER BY id');
+  const { rows } = await pool.query('SELECT id, nama, email, status, role, created_at FROM admins ORDER BY id');
   res.json({ data: rows });
 }));
 
 const passwordRule = Joi.string().min(8).max(72).messages({ 'string.min': 'Kata sandi minimal 8 karakter', 'string.max': 'Kata sandi maksimal 72 karakter' });
+const roleRule = Joi.string().valid('super_admin', 'approver', 'viewer'); // RBAC (tambahan.md poin 6)
 
-router.post('/admins', asyncHandler(async (req, res) => {
+router.post('/admins', superOnly, asyncHandler(async (req, res) => {
   const v = validate(Joi.object({
     nama: Joi.string().trim().min(2).max(120).required().messages({ 'any.required': 'Nama wajib diisi', 'string.empty': 'Nama wajib diisi' }),
     email: Joi.string().trim().lowercase().email({ tlds: { allow: false } }).max(160).required().messages({ 'any.required': 'Email wajib diisi', 'string.email': 'Format email tidak valid', 'string.empty': 'Email wajib diisi' }),
     password: passwordRule.required().messages({ 'any.required': 'Kata sandi wajib diisi' }),
+    role: roleRule.default('viewer'),
   }), req.body);
   try {
     const row = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        'INSERT INTO admins (nama, email, password_hash) VALUES ($1, $2, $3) RETURNING id, nama, email, status, created_at',
-        [v.nama, v.email, await bcrypt.hash(v.password, 10)]
+        'INSERT INTO admins (nama, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, nama, email, status, role, created_at',
+        [v.nama, v.email, await bcrypt.hash(v.password, 10), v.role]
       );
-      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'admin.buat', objekTipe: 'admin', objekId: rows[0].id, detail: { email: v.email } });
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'admin.buat', objekTipe: 'admin', objekId: rows[0].id, detail: { email: v.email, role: v.role } });
       return rows[0];
     });
     res.status(201).json({ data: row });
@@ -265,31 +295,41 @@ router.post('/admins', asyncHandler(async (req, res) => {
   }
 }));
 
-router.patch('/admins/:id', asyncHandler(async (req, res) => {
-  const v = validate(Joi.object({ status: Joi.string().valid('aktif', 'nonaktif'), password: passwordRule }).or('status', 'password'), req.body);
+router.patch('/admins/:id', superOnly, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({ status: Joi.string().valid('aktif', 'nonaktif'), password: passwordRule, role: roleRule }).or('status', 'password', 'role'), req.body);
   const row = await withTransaction(async (client) => {
-    const { rows: cur } = await client.query('SELECT id, status FROM admins WHERE id = $1 FOR UPDATE', [req.params.id]);
+    const { rows: cur } = await client.query('SELECT id, status, role FROM admins WHERE id = $1 FOR UPDATE', [req.params.id]);
     if (!cur.length) throw notFound('Admin tidak ditemukan');
     const sets = [];
     const params = [req.params.id];
     const detail = {};
+    const isSelf = String(req.user.id) === String(req.params.id);
     if (v.status && v.status !== cur[0].status) {
       if (v.status === 'nonaktif') {
-        if (String(req.user.id) === String(req.params.id)) throw conflict('Anda tidak dapat menonaktifkan akun sendiri.', 'SELF_DEACTIVATE');
-        const { rows: active } = await client.query("SELECT COUNT(*)::int AS n FROM admins WHERE status = 'aktif' AND id <> $1", [req.params.id]);
-        if (active[0].n < 1) throw conflict('Minimal harus ada satu admin aktif.', 'LAST_ADMIN');
+        if (isSelf) throw conflict('Anda tidak dapat menonaktifkan akun sendiri.', 'SELF_DEACTIVATE');
+        const { rows: active } = await client.query("SELECT COUNT(*)::int AS n FROM admins WHERE status = 'aktif' AND role = 'super_admin' AND id <> $1", [req.params.id]);
+        if (cur[0].role === 'super_admin' && active[0].n < 1) throw conflict('Minimal harus ada satu super admin aktif.', 'LAST_ADMIN');
       }
       params.push(v.status);
       sets.push(`status = $${params.length}`, 'sesi_valid_sejak = now()');
       detail.status = v.status;
+    }
+    if (v.role && v.role !== cur[0].role) {
+      if (isSelf && cur[0].role === 'super_admin' && v.role !== 'super_admin') {
+        const { rows: others } = await client.query("SELECT COUNT(*)::int AS n FROM admins WHERE role = 'super_admin' AND status = 'aktif' AND id <> $1", [req.params.id]);
+        if (others[0].n < 1) throw conflict('Tidak dapat menurunkan peran diri sendiri: ini super admin aktif terakhir.', 'LAST_ADMIN');
+      }
+      params.push(v.role);
+      sets.push(`role = $${params.length}`, 'sesi_valid_sejak = now()');
+      detail.role = v.role;
     }
     if (v.password) {
       params.push(await bcrypt.hash(v.password, 10));
       sets.push(`password_hash = $${params.length}`, 'gagal_login = 0', 'terkunci_sampai = NULL', 'sesi_valid_sejak = now()');
       detail.password = 'direset';
     }
-    if (!sets.length) return (await client.query('SELECT id, nama, email, status, created_at FROM admins WHERE id = $1', [req.params.id])).rows[0];
-    const { rows } = await client.query(`UPDATE admins SET ${[...new Set(sets)].join(', ')} WHERE id = $1 RETURNING id, nama, email, status, created_at`, params);
+    if (!sets.length) return (await client.query('SELECT id, nama, email, status, role, created_at FROM admins WHERE id = $1', [req.params.id])).rows[0];
+    const { rows } = await client.query(`UPDATE admins SET ${[...new Set(sets)].join(', ')} WHERE id = $1 RETURNING id, nama, email, status, role, created_at`, params);
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'admin.ubah', objekTipe: 'admin', objekId: rows[0].id, detail });
     return rows[0];
   });
@@ -323,7 +363,7 @@ router.get('/members', asyncHandler(async (req, res) => {
   res.json({ data: rows, meta: { page, limit, total: count[0].total } });
 }));
 
-router.patch('/members/:id', asyncHandler(async (req, res) => {
+router.patch('/members/:id', writeAccess, asyncHandler(async (req, res) => {
   const v = validate(Joi.object({ status_akun: Joi.string().valid('aktif', 'nonaktif').required() }), req.body);
   const row = await withTransaction(async (client) => {
     const { rows } = await client.query(
@@ -336,6 +376,205 @@ router.patch('/members/:id', asyncHandler(async (req, res) => {
     return rows[0];
   });
   res.json({ data: row });
+}));
+
+// ---- Tier & Progress (tambahan.md poin 1) ----
+const tierSchema = Joi.object({
+  nama: Joi.string().trim().min(1).max(60).required(),
+  urutan: Joi.number().integer().min(1).required(),
+  min_poin: Joi.number().integer().min(0).required(),
+  benefit: Joi.string().allow('', null).max(1000),
+});
+
+router.get('/tiers', asyncHandler(async (req, res) => {
+  res.json({ data: await tiersService.listTiers(pool) });
+}));
+
+router.post('/tiers', superOnly, asyncHandler(async (req, res) => {
+  const v = validate(tierSchema, req.body);
+  try {
+    const { rows } = await withTransaction(async (client) => {
+      const r = await client.query('INSERT INTO tiers (nama, urutan, min_poin, benefit) VALUES ($1,$2,$3,$4) RETURNING *', [v.nama, v.urutan, v.min_poin, v.benefit || null]);
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.buat', objekTipe: 'tier', objekId: r.rows[0].id, detail: v });
+      return r;
+    });
+    res.status(201).json({ data: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') throw conflict('Urutan tier sudah dipakai tier lain.', 'ORDER_TAKEN');
+    throw err;
+  }
+}));
+
+router.put('/tiers/:id', superOnly, asyncHandler(async (req, res) => {
+  const v = validate(tierSchema, req.body);
+  try {
+    const row = await withTransaction(async (client) => {
+      const { rows } = await client.query('UPDATE tiers SET nama=$2, urutan=$3, min_poin=$4, benefit=$5 WHERE id=$1 RETURNING *', [req.params.id, v.nama, v.urutan, v.min_poin, v.benefit || null]);
+      if (!rows.length) throw notFound('Tier tidak ditemukan');
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.ubah', objekTipe: 'tier', objekId: rows[0].id, detail: v });
+      return rows[0];
+    });
+    res.json({ data: row });
+  } catch (err) {
+    if (err.code === '23505') throw conflict('Urutan tier sudah dipakai tier lain.', 'ORDER_TAKEN');
+    throw err;
+  }
+}));
+
+router.delete('/tiers/:id', superOnly, asyncHandler(async (req, res) => {
+  const { rows: used } = await pool.query('SELECT COUNT(*)::int AS n FROM members WHERE current_tier_id = $1', [req.params.id]);
+  if (used[0].n > 0) throw conflict(`Tier masih dipakai ${used[0].n} member, tidak dapat dihapus. Nonaktifkan dengan mengatur urutan/threshold sebagai gantinya.`, 'TIER_IN_USE');
+  const { rowCount } = await pool.query('DELETE FROM tiers WHERE id = $1', [req.params.id]);
+  if (!rowCount) throw notFound('Tier tidak ditemukan');
+  await audit(pool, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.hapus', objekTipe: 'tier', objekId: req.params.id });
+  res.json({ message: 'ok' });
+}));
+
+router.get('/tiers/growth', asyncHandler(async (req, res) => {
+  res.json({ data: await metrics.tierGrowth(Number(req.query.months) || 6) });
+}));
+
+// ---- Voucher Management (tambahan.md poin 3) ----
+router.get('/vouchers', asyncHandler(async (req, res) => {
+  res.json(await vouchersService.listVouchers({ status: req.query.status, q: req.query.q, pagination: parsePagination(req.query) }));
+}));
+
+router.post('/vouchers/:id/void', writeAccess, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({ alasan: Joi.string().trim().min(3).max(500).required() }), req.body);
+  res.json({ data: await vouchersService.voidVoucher({ id: req.params.id, adminId: req.user.id, alasan: v.alasan }) });
+}));
+
+// ---- Aturan poin per channel (Admin Dashboard poin 6: "bisa beda rule per channel") ----
+router.get('/point-rules/channel', asyncHandler(async (req, res) => {
+  res.json({ data: await listChannelPointRules(pool) });
+}));
+
+const channelRuleSchema = Joi.object({
+  channel: Joi.string().trim().min(1).max(60).required(),
+  rupiah_per_poin: Joi.number().integer().min(1).max(1000000000).required(),
+  pembulatan: Joi.string().valid('bawah', 'atas', 'terdekat').required(),
+  minimal_transaksi: Joi.number().min(0).max(9999999999999).required(),
+});
+
+router.put('/point-rules/channel', superOnly, asyncHandler(async (req, res) => {
+  const v = validate(channelRuleSchema, req.body);
+  await withTransaction(async (client) => {
+    await client.query(
+      `INSERT INTO channel_point_rules (channel, rupiah_per_poin, pembulatan, minimal_transaksi, diubah_oleh)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (channel) DO UPDATE SET rupiah_per_poin=$2, pembulatan=$3, minimal_transaksi=$4, diubah_oleh=$5, updated_at=now()`,
+      [v.channel, v.rupiah_per_poin, v.pembulatan, v.minimal_transaksi, req.user.id]
+    );
+    await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'pengaturan.poin_channel', objekTipe: 'pengaturan', detail: v });
+  });
+  res.json({ data: await listChannelPointRules(pool) });
+}));
+
+router.delete('/point-rules/channel/:channel', superOnly, asyncHandler(async (req, res) => {
+  const { rowCount } = await pool.query('DELETE FROM channel_point_rules WHERE channel = $1', [req.params.channel]);
+  if (!rowCount) throw notFound('Aturan channel ini tidak ditemukan');
+  await audit(pool, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'pengaturan.poin_channel_hapus', objekTipe: 'pengaturan', detail: { channel: req.params.channel } });
+  res.json({ message: 'ok' });
+}));
+
+// ---- Member: manual point adjustment (Admin Dashboard poin 6) ----
+router.post('/members/:id/points', writeAccess, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({
+    jumlah: Joi.number().integer().invalid(0).required().messages({ 'any.invalid': 'Jumlah tidak boleh nol', 'any.required': 'Jumlah wajib diisi' }),
+    alasan: Joi.string().trim().min(3).max(500).required().messages({ 'any.required': 'Alasan wajib diisi', 'string.min': 'Alasan terlalu pendek' }),
+  }), req.body);
+  await withTransaction(async (client) => {
+    const { rows } = await client.query('SELECT 1 FROM members WHERE id = $1', [req.params.id]);
+    if (!rows.length) throw notFound('Member tidak ditemukan');
+    const adjId = await manualAdjustment(client, { memberId: req.params.id, jumlah: v.jumlah, alasan: v.alasan, adminId: req.user.id });
+    await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'poin.penyesuaian_manual', objekTipe: 'member', objekId: req.params.id, detail: { jumlah: v.jumlah, alasan: v.alasan, adjustment_id: adjId } });
+  });
+  res.json({ data: await getBalance(pool, req.params.id) });
+}));
+
+router.get('/members/:id/points/mutations', asyncHandler(async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query);
+  const { rows: count } = await pool.query('SELECT COUNT(*)::int AS total FROM points_ledger WHERE member_id = $1', [req.params.id]);
+  const { rows } = await pool.query(
+    `SELECT l.id, l.jenis, l.jumlah, l.referensi_tipe, l.referensi_id, l.created_at,
+            CASE l.referensi_tipe WHEN 'receipt' THEN r.nomor_transaksi WHEN 'manual' THEN pa.alasan ELSE w.nama END AS keterangan
+       FROM points_ledger l
+       LEFT JOIN receipts r ON l.referensi_tipe = 'receipt' AND r.id = l.referensi_id
+       LEFT JOIN redeems d ON l.referensi_tipe = 'redeem' AND d.id = l.referensi_id
+       LEFT JOIN rewards w ON w.id = d.reward_id
+       LEFT JOIN point_adjustments pa ON l.referensi_tipe = 'manual' AND pa.id = l.referensi_id
+      WHERE l.member_id = $1 ORDER BY l.created_at DESC, l.id DESC LIMIT $2 OFFSET $3`,
+    [req.params.id, limit, offset]
+  );
+  res.json({ data: rows, meta: { page, limit, total: count[0].total } });
+}));
+
+router.get('/members/:id/tier-history', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT h.id, td.nama AS dari, tk.nama AS ke, h.sebab, h.created_at
+       FROM member_tier_history h LEFT JOIN tiers td ON td.id = h.dari_tier_id LEFT JOIN tiers tk ON tk.id = h.ke_tier_id
+      WHERE h.member_id = $1 ORDER BY h.created_at DESC`,
+    [req.params.id]
+  );
+  res.json({ data: rows });
+}));
+
+// ---- Basic metrics (Admin Dashboard poin 6) ----
+router.get('/metrics', asyncHandler(async (req, res) => {
+  res.json({ data: await metrics.overview() });
+}));
+
+// ---- Log integrasi More (tambahan.md poin 4/5 — audit & troubleshooting) ----
+router.get('/integration-logs', asyncHandler(async (req, res) => {
+  const { page, limit, offset } = parsePagination(req.query, 25);
+  const params = [];
+  const where = [];
+  if (req.query.endpoint) { params.push(req.query.endpoint); where.push(`endpoint = $${params.length}`); }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const { rows: count } = await pool.query(`SELECT COUNT(*)::int AS total FROM integration_logs ${clause}`, params);
+  const { rows } = await pool.query(`SELECT * FROM integration_logs ${clause} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`, params);
+  res.json({ data: rows, meta: { page, limit, total: count[0].total } });
+}));
+
+// ---- Export CSV (Admin Dashboard poin 6: "nilai tambah kalau ada waktu") ----
+router.get('/export/members.csv', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT m.nama, m.email, m.no_hp, m.status_akun, m.created_at, t.nama AS tier,
+            COALESCE(s.masuk,0) - COALESCE(s.terpakai,0) - COALESCE(s.koreksi,0) AS total
+       FROM members m LEFT JOIN tiers t ON t.id = m.current_tier_id
+       LEFT JOIN (SELECT member_id, SUM(jumlah) FILTER (WHERE jenis='masuk') masuk, SUM(jumlah) FILTER (WHERE jenis='terpakai') terpakai, SUM(jumlah) FILTER (WHERE jenis='koreksi') koreksi FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
+      ORDER BY m.id`
+  );
+  sendCsv(res, 'member.csv', rows, [
+    { label: 'Nama', value: 'nama' }, { label: 'Email', value: 'email' }, { label: 'No HP', value: 'no_hp' },
+    { label: 'Status', value: 'status_akun' }, { label: 'Tier', value: 'tier' }, { label: 'Total Poin', value: 'total' },
+    { label: 'Bergabung', value: (r) => r.created_at },
+  ]);
+}));
+
+router.get('/export/redeems.csv', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT m.nama AS member, w.nama AS reward, d.jumlah_poin, d.status, v.kode AS voucher, d.created_at, d.waktu_keputusan
+       FROM redeems d JOIN members m ON m.id = d.member_id JOIN rewards w ON w.id = d.reward_id LEFT JOIN vouchers v ON v.redeem_id = d.id
+      ORDER BY d.id DESC`
+  );
+  sendCsv(res, 'redeem.csv', rows, [
+    { label: 'Member', value: 'member' }, { label: 'Reward', value: 'reward' }, { label: 'Poin', value: 'jumlah_poin' },
+    { label: 'Status', value: 'status' }, { label: 'Kode Voucher', value: 'voucher' },
+    { label: 'Diajukan', value: (r) => r.created_at }, { label: 'Diputuskan', value: (r) => r.waktu_keputusan },
+  ]);
+}));
+
+router.get('/export/receipts.csv', asyncHandler(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT m.nama AS member, r.channel, r.nomor_transaksi, r.nominal, r.status, r.sumber, r.created_at
+       FROM receipts r JOIN members m ON m.id = r.member_id ORDER BY r.id DESC`
+  );
+  sendCsv(res, 'struk.csv', rows, [
+    { label: 'Member', value: 'member' }, { label: 'Channel', value: 'channel' }, { label: 'No Transaksi', value: 'nomor_transaksi' },
+    { label: 'Nominal', value: 'nominal' }, { label: 'Status', value: 'status' }, { label: 'Sumber', value: 'sumber' },
+    { label: 'Tanggal', value: (r) => r.created_at },
+  ]);
 }));
 
 // ---- Log audit: hanya baca (ADM-05, BR-12, NFR-06) ----

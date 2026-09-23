@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Alert, Button, Skeleton, Table, Tabs } from 'antd';
 import { useState } from 'react';
 import { useLoad } from '../../hooks';
+import TierProgress from '../../components/TierProgress';
 import { MUTATION, fmtDate, fmtDateTime, num, rupiah } from '../../format';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data, loading, error } = useLoad('/member/dashboard');
+  const { data: tier } = useLoad('/member/tier');
   const d = data?.data;
 
   return (
@@ -65,6 +67,7 @@ export default function Dashboard() {
               <div className="num">{num(d.points.ditahan)}</div>
             </div>
           </div>
+          <TierProgress data={tier?.data} />
           <div className="actions" style={{ margin: '16px 0 24px' }}>
             <Button type="primary" onClick={() => navigate('/upload')}>Upload Struk</Button>
             <Button onClick={() => navigate('/redeem')}>Tukar Poin</Button>

@@ -26,6 +26,9 @@ const ProgramSettings = lazy(() => import('./pages/admin/ProgramSettings'));
 const Rewards = lazy(() => import('./pages/admin/Rewards'));
 const AuditLog = lazy(() => import('./pages/admin/AuditLog'));
 const Members = lazy(() => import('./pages/admin/Members'));
+const Tiers = lazy(() => import('./pages/admin/Tiers'));
+const Vouchers = lazy(() => import('./pages/admin/Vouchers'));
+const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const Admins = lazy(() => import('./pages/admin/Admins'));
 
 // Token desain dari FRONTEND.md (Bagian 0): monokrom, banyak whitespace, border tipis, radius 4px.
@@ -76,7 +79,7 @@ export default function App() {
 
               <Route path="/admin/login" element={<Login admin />} />
               <Route path="/admin" element={<RequireRole role="admin"><AdminLayout /></RequireRole>}>
-                <Route index element={<Navigate to="struk" replace />} />
+                <Route index element={<AdminDashboard />} />
                 <Route path="struk" element={<ReceiptQueue />} />
                 <Route path="struk/:id" element={<ReceiptReview />} />
                 <Route path="redeem" element={<RedeemQueue />} />
@@ -84,6 +87,8 @@ export default function App() {
                 <Route path="auto-approve" element={<AutoApprove />} />
                 <Route path="pengaturan" element={<ProgramSettings />} />
                 <Route path="reward" element={<Rewards />} />
+                <Route path="tier" element={<Tiers />} />
+                <Route path="voucher" element={<Vouchers />} />
                 <Route path="member" element={<Members />} />
                 <Route path="kelola-admin" element={<Admins />} />
                 <Route path="audit" element={<AuditLog />} />

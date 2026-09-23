@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Popconfirm, Table, Tabs, Tooltip, App } from 'antd';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
-import { fmtDateTime, num } from '../../format';
+import { fmtDateTime, num, VOUCHER_STATUS } from '../../format';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
 
@@ -71,6 +71,7 @@ export default function Redeem() {
                 <div className="reward-grid">
                   {(rewards.data?.data || []).map((r) => {
                     const kurang = r.poin_dibutuhkan - tersedia;
+                    const terkunci = kurang > 0 || r.memenuhi_tier === false;
                     return (
                       <div className="reward-card" key={r.id}>
                         <div className="reward-visual">
@@ -79,11 +80,15 @@ export default function Redeem() {
                         <div className="reward-body">
                           <h3>{r.nama}</h3>
                           {r.deskripsi && <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{r.deskripsi}</div>}
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                            {r.tier_minimum_nama && <span>Khusus tier {r.tier_minimum_nama}+</span>}
+                            {r.stok !== null && <span>· Sisa stok {num(r.stok)}</span>}
+                          </div>
                           <div style={{ fontWeight: 600, marginTop: 'auto' }}>{num(r.poin_dibutuhkan)} poin</div>
-                          <Tooltip title={kurang > 0 ? `Poin Anda kurang ${num(kurang)} lagi` : ''}>
+                          <Tooltip title={r.memenuhi_tier === false ? `Khusus member tier ${r.tier_minimum_nama} ke atas` : kurang > 0 ? `Poin Anda kurang ${num(kurang)} lagi` : ''}>
                             <span>
-                              <Button type="primary" block disabled={kurang > 0} onClick={() => redeem(r)}>
-                                {kurang > 0 ? 'Poin belum cukup' : 'Tukar'}
+                              <Button type="primary" block disabled={terkunci} onClick={() => redeem(r)}>
+                                {r.memenuhi_tier === false ? 'Tier belum memenuhi' : kurang > 0 ? 'Poin belum cukup' : 'Tukar'}
                               </Button>
                             </span>
                           </Tooltip>

@@ -55,6 +55,13 @@ const config = {
   // Batas permintaan API per IP per menit (semua endpoint). Kantor/NAT dengan banyak pengguna satu IP perlu nilai lebih besar.
   rateLimitPerMinute: int(process.env.RATE_LIMIT_PER_MIN, 300),
   loginRateLimit: int(process.env.LOGIN_RATE_LIMIT, 30),
+  // Integrasi More by Morello (tambahan.md poin 4 & 5) — default aman menunggu spesifikasi resmi dari tim More.
+  more: {
+    apiKey: process.env.MORE_API_KEY, // kosong = endpoint integrasi nonaktif (403)
+    autoRegisterUnknownMember: process.env.MORE_AUTO_REGISTER === 'true', // default: tolak (memutuskan OI terbuka)
+    voucherReserveMinutes: int(process.env.MORE_VOUCHER_RESERVE_MINUTES, 15),
+  },
+  maintenanceIntervalMinutes: int(process.env.MAINTENANCE_INTERVAL_MINUTES, 10), // evaluasi tier & expire voucher/reservasi
   maxLoginAttempts: 5,
   lockMinutes: 15,
 };

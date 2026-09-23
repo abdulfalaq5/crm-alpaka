@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { App, Button, Form, Input, Modal, Popconfirm, Table } from 'antd';
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Table } from 'antd';
+
+const ROLE_LABEL = { super_admin: 'Super Admin', approver: 'Approver', viewer: 'Viewer' };
+
 import api, { errMsg, fieldErrors } from '../../api';
 import { useAuth } from '../../auth';
 import { useLoad } from '../../hooks';
@@ -65,12 +68,20 @@ export default function Admins() {
         pagination={false}
         columns={[
           { title: 'Admin', render: (_, r) => <>{r.nama}<div className="cell-sub">{r.email}</div></> },
+          { title: 'Peran', dataIndex: 'role', render: (r) => ROLE_LABEL[r] || r },
           { title: 'Dibuat', dataIndex: 'created_at', render: fmtDate, responsive: ['md'] },
           { title: 'Status', dataIndex: 'status', render: (s) => <StatusBadge status={s === 'aktif' ? 'disetujui' : 'dibatalkan'} label={s === 'aktif' ? 'Aktif' : 'Nonaktif'} />, responsive: ['sm'] },
           {
             title: '',
             render: (_, r) => (
               <div className="actions">
+                <Select
+                  size="small"
+                  value={r.role}
+                  style={{ width: 120 }}
+                  options={Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }))}
+                  onChange={(role) => patch(r.id, { role }, 'Peran diubah.')}
+                />
                 <Button size="small" onClick={() => setResetFor(r)}>Reset sandi</Button>
                 {r.status === 'aktif' ? (
                   <Popconfirm title="Nonaktifkan admin ini?" okText="Nonaktifkan" cancelText="Batal" onConfirm={() => patch(r.id, { status: 'nonaktif' }, 'Admin dinonaktifkan.')} disabled={String(r.id) === String(user?.id)}>
@@ -89,6 +100,9 @@ export default function Admins() {
           <Form.Item name="nama" label="Nama" rules={[{ required: true, whitespace: true, message: 'Nama wajib diisi' }]}><Input /></Form.Item>
           <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Email valid wajib diisi' }]}><Input /></Form.Item>
           <Form.Item name="password" label="Kata sandi awal" rules={[{ required: true, min: 8, message: 'Minimal 8 karakter' }]}><Input.Password autoComplete="new-password" /></Form.Item>
+          <Form.Item name="role" label="Peran" initialValue="viewer" extra="Super Admin: semua akses. Approver: review struk/redeem/reward/voucher, tanpa akses pengaturan. Viewer: hanya baca.">
+            <Select options={Object.entries(ROLE_LABEL).map(([value, label]) => ({ value, label }))} />
+          </Form.Item>
         </Form>
       </Modal>
       <Modal open={!!resetFor} title={`Reset kata sandi — ${resetFor?.nama || ''}`} okText="Reset" cancelText="Batal" onOk={() => resetForm.submit()} onCancel={() => setResetFor(null)} destroyOnHidden forceRender>

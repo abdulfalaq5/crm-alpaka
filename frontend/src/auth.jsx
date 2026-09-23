@@ -67,3 +67,14 @@ export function RequireRole({ role, children }) {
   if (user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace />;
   return children;
 }
+
+/** RBAC admin di sisi UI (tambahan.md poin 6) — server tetap menegakkan lewat 403 (middleware/adminRole.js). */
+export function useAdminRole() {
+  const { user } = useAuth();
+  const role = user?.admin_role;
+  return {
+    role,
+    isSuperAdmin: role === 'super_admin',
+    canWrite: role === 'super_admin' || role === 'approver', // operasional: approve/reject/reward/voucher
+  };
+}
