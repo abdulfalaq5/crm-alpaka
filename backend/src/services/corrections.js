@@ -4,6 +4,7 @@ const { notify } = require('./notifications');
 const { getBalance, lockMember, addEntry, hitungPoin } = require('./points');
 const { getPointRule } = require('./settings');
 const { getReceipt } = require('./receipts');
+const tiers = require('./tiers');
 const { notFound, conflict, unprocessable } = require('../utils/http');
 
 /**
@@ -87,6 +88,7 @@ async function correctReceipt({ id, adminId, alasan }) {
     }
 
     await client.query('UPDATE receipt_corrections SET poin_delta = $2 WHERE id = $1', [correctionId, poinDelta]);
+    await tiers.reevaluate(client, receipt.member_id);
     await audit(client, {
       pelakuTipe: 'admin', pelakuId: adminId, aksi: 'struk.koreksi', objekTipe: 'receipt', objekId: id,
       detail: { dari: receipt.status, ke, alasan, poin: poinDelta },

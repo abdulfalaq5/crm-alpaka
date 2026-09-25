@@ -15,6 +15,7 @@ const ReceiptUpload = lazy(() => import('./pages/member/ReceiptUpload'));
 const ReceiptList = lazy(() => import('./pages/member/ReceiptList'));
 const ReceiptDetail = lazy(() => import('./pages/member/ReceiptDetail'));
 const Redeem = lazy(() => import('./pages/member/Redeem'));
+const MyVouchers = lazy(() => import('./pages/member/Vouchers'));
 const Notifications = lazy(() => import('./pages/member/Notifications'));
 const Profile = lazy(() => import('./pages/member/Profile'));
 const ReceiptQueue = lazy(() => import('./pages/admin/ReceiptQueue'));
@@ -73,6 +74,7 @@ export default function App() {
                 <Route path="struk" element={<ReceiptList />} />
                 <Route path="struk/:id" element={<ReceiptDetail />} />
                 <Route path="redeem" element={<Redeem />} />
+                <Route path="voucher" element={<MyVouchers />} />
                 <Route path="notifikasi" element={<Notifications />} />
                 <Route path="profil" element={<Profile />} />
               </Route>

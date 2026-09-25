@@ -9,6 +9,7 @@ const NAV = [
   { key: '/upload', label: <Link to="/upload">Upload Struk</Link> },
   { key: '/struk', label: <Link to="/struk">Riwayat Struk</Link> },
   { key: '/redeem', label: <Link to="/redeem">Redeem</Link> },
+  { key: '/voucher', label: <Link to="/voucher">Voucher</Link> },
   { key: '/notifikasi', label: <Link to="/notifikasi">Notifikasi</Link> },
 ];
 

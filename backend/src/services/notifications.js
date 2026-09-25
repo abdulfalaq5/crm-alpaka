@@ -20,9 +20,12 @@ const EVENTS = {
   redeem_diajukan: 'Redeem diajukan',
   redeem_disetujui: 'Redeem disetujui',
   redeem_ditolak: 'Redeem ditolak',
+  voucher_manual: 'Voucher diterbitkan',
+  voucher_perpanjang: 'Masa berlaku voucher diperpanjang',
+  voucher_void: 'Voucher dibatalkan',
 };
 
-const LINKS = { receipt: (id) => `/struk/${id}`, redeem: () => '/redeem' };
+const LINKS = { receipt: (id) => `/struk/${id}`, redeem: () => '/redeem', voucher: () => '/voucher' };
 
 const emailChannel = {
   kanal: 'email',

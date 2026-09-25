@@ -42,7 +42,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data, loading, error } = useLoad('/member/dashboard');
-  const { data: tier } = useLoad('/member/tier');
+  const { data: tier, loading: tierLoading, error: tierError } = useLoad('/member/tier');
   const d = data?.data;
 
   return (
@@ -52,22 +52,40 @@ export default function Dashboard() {
       {error && <Alert type="error" showIcon message={error} />}
       {loading && !d && <Skeleton active />}
       {d && (
-        <>
-          <div className="balance-grid">
-            <div className="balance-item primary">
-              <div className="section-label">Poin tersedia</div>
-              <div className="num">{num(d.points.tersedia)}</div>
-            </div>
-            <div className="balance-item">
-              <div className="section-label">Total poin</div>
-              <div className="num">{num(d.points.total)}</div>
-            </div>
-            <div className="balance-item">
-              <div className="section-label">Ditahan (hold)</div>
-              <div className="num">{num(d.points.ditahan)}</div>
-            </div>
+        <div className="balance-grid">
+          <div className="balance-item primary">
+            <div className="section-label">Poin tersedia</div>
+            <div className="num">{num(d.points.tersedia)}</div>
           </div>
-          <TierProgress data={tier?.data} />
+          <div className="balance-item">
+            <div className="section-label">Total poin</div>
+            <div className="num">{num(d.points.total)}</div>
+          </div>
+          <div className="balance-item">
+            <div className="section-label">Ditahan (hold)</div>
+            <div className="num">{num(d.points.ditahan)}</div>
+          </div>
+        </div>
+      )}
+      <TierProgress data={tier?.data} loading={tierLoading} error={tierError} />
+      {d?.voucher_aktif?.total > 0 && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <p className="section-label">Voucher aktif ({num(d.voucher_aktif.total)})</p>
+          <div className="actions">
+            {d.voucher_aktif.terbaru.map((v) => (
+              <span key={v.id}>
+                <code>{v.kode}</code>{' '}
+                <span className="cell-sub">
+                  {v.reward_nama} · berlaku sampai {fmtDate(v.expires_at)}
+                </span>
+              </span>
+            ))}
+          </div>
+          <div style={{ marginTop: 8 }}><Link to="/voucher">Lihat semua voucher</Link></div>
+        </div>
+      )}
+      {d && (
+        <>
           <div className="actions" style={{ margin: '16px 0 24px' }}>
             <Button type="primary" onClick={() => navigate('/upload')}>Upload Struk</Button>
             <Button onClick={() => navigate('/redeem')}>Tukar Poin</Button>

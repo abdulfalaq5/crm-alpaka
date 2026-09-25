@@ -10,8 +10,8 @@ Rencana lengkap: [BACKEND.md](BACKEND.md) dan [FRONTEND.md](FRONTEND.md).
 
 ## Fitur
 
-- **Member Portal** — registrasi & login, upload struk (JPG/PNG/PDF), riwayat & detail struk, pengajuan ulang struk yang ditolak, dashboard saldo poin (total / ditahan / tersedia) + mutasi poin, **tier & progress**, redeem reward (filter tier & stok), **voucher** (kode otomatis + masa berlaku), notifikasi in-app, profil (+ preferensi kanal notifikasi).
-- **Admin Panel** (`/admin`) — dashboard metrik, antrean & review struk (setujui / tolak / **koreksi keputusan** + alasan), antrean & review redeem, pengaturan auto-approve, pengaturan program (konversi poin, masa klaim, batas file, channel, **aturan poin per channel**), manajemen reward (+ stok, tier minimum, masa berlaku, gambar), **manajemen tier**, **monitoring & void voucher**, manajemen member (aktif/nonaktif, **penyesuaian poin manual**), kelola admin (**RBAC**: super_admin/approver/viewer), export CSV, log audit (read-only).
+- **Member Portal** — registrasi & login, upload struk (JPG/PNG/PDF), riwayat & detail struk, pengajuan ulang struk yang ditolak, dashboard saldo poin (total / ditahan / tersedia) + mutasi poin, **tier & progress**, redeem reward (filter tier & stok), **voucher** (kode, masa berlaku, countdown, salin kode, cek kode, riwayat), notifikasi in-app, profil (+ preferensi kanal notifikasi).
+- **Admin Panel** (`/admin`) — dashboard metrik, antrean & review struk (setujui / tolak / **koreksi keputusan** + alasan), antrean & review redeem, pengaturan auto-approve, pengaturan program (konversi poin, masa klaim, batas file, channel, **aturan poin per channel**), manajemen reward (+ stok, tier minimum, masa berlaku, gambar), **manajemen tier**, **manajemen voucher** (generate manual & batch, filter, perpanjang masa berlaku, void, export CSV, jalankan pembersihan expiry/reservasi), manajemen member (aktif/nonaktif, **penyesuaian poin manual**), kelola admin (**RBAC**: super_admin/approver/viewer), export CSV, log audit (read-only).
 - **Integrasi More by Morello** (`/api/integrations/more/*`) — webhook transaksi → poin otomatis, validasi & konfirmasi voucher saat checkout. Autentikasi API key, idempotent, tercatat di log integrasi. Lihat [Integrasi More by Morello](#integrasi-more-by-morello).
 - **Aturan yang ditegakkan di server** — RBAC member/admin (3 peran), validasi otomatis (kelengkapan, duplikat, tanggal, nominal), poin idempotent (unique constraint), perubahan saldo dalam transaksi atomik dengan row lock, log audit immutable (trigger database), file bukti tidak publik (hanya pemilik & admin), rate limit + penguncian akun setelah 5 kali gagal login, sesi berakhir otomatis bila tidak aktif dan dicabut seketika saat nonaktif/ganti password.
 
@@ -77,6 +77,8 @@ cd frontend && npm run build     # build produksi ke frontend/dist
 
 - **Tier** dievaluasi otomatis dari **total poin lifetime** (poin masuk dikurangi koreksi — **tidak** berkurang saat redeem) setiap kali poin bertambah. Default: Bronze (0) / Silver (100) / Gold (300) / Platinum (800), poin dan nama dapat diubah admin di menu **Tier**. Riwayat naik/turun tercatat di `member_tier_history`.
 - **Voucher** diterbitkan otomatis (kode `ALP-XXXXXXXX`) saat admin menyetujui redeem, dengan masa berlaku per reward (`berlaku_hari`, default 30 hari). Status: `active` → `reserved` (saat validasi checkout) → `used` / kembali `active` (reservasi lewat waktu) / `expired` / `void` (dibatalkan admin). Reservasi dan voucher kedaluwarsa dibersihkan otomatis setiap `MAINTENANCE_INTERVAL_MINUTES` menit (default 10).
+- **Voucher dari halaman Voucher (menu admin `/admin/voucher`)** — generate manual untuk member (satu atau sekaligus sampai 25 kode, masa berlaku opsional, catatan opsional). Voucher manual tetap terikat ke satu redeem `sumber='manual'` supaya laporan redemption tetap 1:1, dan **poin member dipotong saat generate** (entri `hold` + `terpakai`). Void mengembalikan poin tersebut sebagai entri `kembalian`; void voucher yang berasal dari redeem biasa hanya mencabut kode. **Perpanjang** menambah masa berlaku (alasan wajib) dan hanya untuk voucher `active`. Tabel mendukung filter status (bisa beberapa sekaligus), sumber, rentang tanggal terbit, dan pencarian kode/nama member/nama reward; filter yang sama berlaku untuk **Export CSV**, dan tombol **Jalankan Pembersihan** menjalankan expiry + pelepasan reservasi di luar jadwal scheduler.
+- **Halaman Voucher member (`/voucher`)** hanya read-only: kartu voucher aktif dengan sisa hari berlaku, tombol salin kode, form cek kode, riwayat, dan ringkasan. Penukaran voucher tetap lewat checkout More by Morello (status `reserved`/`used` hanya boleh diubah dari integrasi), dan kode milik member lain dijawab 404 yang sama dengan kode tidak ada supaya keberadaan kode tidak bocor.
 - **Reward** kini mendukung stok (opsional, tanpa batas bila kosong), syarat tier minimum, dan masa tampil (`valid_from`/`valid_until`).
 - **RBAC admin** — `super_admin` (semua akses termasuk pengaturan & kelola admin), `approver` (operasional: review struk/redeem, kelola reward/voucher/member, tanpa akses pengaturan sistem), `viewer` (hanya baca). Admin baru dari menu **Kelola Admin** default `viewer`; atur perannya dari halaman yang sama. Server menegakkan lewat `middleware/adminRole.js`; UI menyembunyikan aksi yang tidak berhak, tapi tidak menggantikan penegakan server.
 - **Penyesuaian poin manual** (menu **Member** → Sesuaikan Poin) mencatat ke `point_adjustments` + `points_ledger` dan ikut memicu evaluasi ulang tier. Pengurangan ditolak bila melebihi saldo tersedia.
@@ -105,7 +107,7 @@ Implementasi **default** (tambahan.md poin 4 & 5) agar sistem langsung dapat men
 
 ## Migrasi & seeder
 
-- **Migrasi baru:** tambahkan file `backend/src/db/migrations/002_nama.sql` (urut nomor). Jangan mengubah file yang sudah diterapkan.
+- **Migrasi baru:** tambahkan file `backend/src/db/migrations/00N_nama.sql` (urut nomor). Jangan mengubah file yang sudah diterapkan. Terakhir: `005_voucher_manual.sql` (sumber/dibuat_oleh/catatan voucher & redeem) dan `006_ledger_kembalian.sql` (jenis ledger `kembalian` untuk pengembalian poin saat voucher manual di-void).
 - **Seeder:** `01_settings` (aturan poin + pengaturan program), `02_auto_approve`, `03_admin` (dari `ADMIN_*` di `.env`), `04_rewards`; `demo_data` (8 member, ±35 struk, redeem, notifikasi, audit, file bukti — semua tabel) hanya jalan dengan `--demo`.
 
 ## Data demo untuk presentasi
@@ -119,6 +121,7 @@ Implementasi **default** (tambahan.md poin 4 & 5) agar sistem langsung dapat men
 | `receipts` | 35 — 21 disetujui (8 di antaranya auto-approve), 8 menunggu review, 6 ditolak |
 | `receipt_files` | 36 file bukti nyata (27 PDF, 9 PNG) di `backend/uploads/` |
 | `points_ledger` | 41 entri (masuk, hold, terpakai, lepas) |
+| `vouchers` | terbit dari redeem yang disetujui (kode `ALP-…`) |
 | `rewards` | 7 (1 nonaktif) |
 | `redeems` | 12 — 4 menunggu, 5 selesai (dengan kode voucher), 1 ditolak, 2 dibatalkan |
 | `notifications` | 45 (yang terbaru belum dibaca, agar badge lonceng terisi) |
@@ -126,7 +129,7 @@ Implementasi **default** (tambahan.md poin 4 & 5) agar sistem langsung dapat men
 | `password_resets` | 2 (satu terpakai, satu kedaluwarsa) |
 | `auto_approve_criteria`, `app_settings`, `point_rules` | terisi, tercatat diubah oleh admin |
 
-Kasus yang bisa ditunjukkan: struk ditolak lalu diajukan ulang dan disetujui, duplikat nomor transaksi, melewati masa klaim, tanggal di masa depan, poin ditahan (hold), serta redeem di semua status.
+Kasus yang bisa ditunjukkan: struk ditolak lalu diajukan ulang dan disetujui, duplikat nomor transaksi, melewati masa klaim, tanggal di masa depan, poin ditahan (hold), redeem di semua status, generate voucher manual (+ potong poin), perpanjang masa berlaku, void + kembalian poin, serta alur reservasi/pakai kode di checkout More.
 
 ### Akun dari seeder (email & kata sandi)
 

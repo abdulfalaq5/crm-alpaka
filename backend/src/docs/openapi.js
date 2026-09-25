@@ -52,8 +52,7 @@ function op({ tag, summary, description, auth, params = [], body, multipart, ok 
   };
 }
 
-const receiptForm = obj(
-  {
+const receiptForm = obj(  {
     channel: str({ example: 'Retail' }),
     nomor_transaksi: str({ example: 'INV-2609-0001' }),
     tanggal_transaksi: str({ format: 'date', example: '2026-09-20' }),
@@ -63,6 +62,16 @@ const receiptForm = obj(
   ['channel', 'nomor_transaksi', 'tanggal_transaksi', 'nominal', 'files']
 );
 const reasonBody = (example = 'Foto struk buram, nominal tidak terbaca.') => ({ schema: obj({ alasan: str({ minLength: 3, maxLength: 500, example }) }, ['alasan']) });
+
+// Filter bersama untuk daftar voucher admin & laporan redemption (export CSV).
+const voucherStatusEnum = str({ enum: ['active', 'reserved', 'used', 'expired', 'void'] });
+const voucherFilters = [
+  q('status', 'Status', voucherStatusEnum),
+  q('sumber', 'Sumber', str({ enum: ['redeem', 'manual'] })),
+  q('q', 'Cari kode / nama member / email'),
+  q('from', 'Diterbitkan mulai (YYYY-MM-DD)', str({ format: 'date' })),
+  q('to', 'Diterbitkan sampai (YYYY-MM-DD)', str({ format: 'date' })),
+];
 
 const paths = {
   // ------------------------------------------------------------------ Sistem
@@ -147,7 +156,7 @@ const paths = {
   },
 
   // ------------------------------------------------- Member: poin & dashboard
-  '/member/dashboard': { get: op({ tag: 'Member — Poin', summary: 'Ringkasan dashboard (DSH-01)', auth: 'member', schema: data(obj({ points: ref('Balance'), struk_terbaru: arr(ref('Receipt')), redeem_terbaru: arr(ref('Redeem')), notifikasi_belum_dibaca: int() })) }) },
+  '/member/dashboard': { get: op({ tag: 'Member — Poin', summary: 'Ringkasan dashboard (DSH-01)', auth: 'member', schema: data(obj({ points: ref('Balance'), struk_terbaru: arr(ref('Receipt')), redeem_terbaru: arr(ref('Redeem')), notifikasi_belum_dibaca: int(), voucher_aktif: obj({ total: int(), terbaru: arr(ref('Voucher')) }) })) }) },
   '/member/points': { get: op({ tag: 'Member — Poin', summary: 'Saldo poin: total, ditahan, tersedia (PNT-04)', description: 'Dihitung dari ledger, tidak disimpan sebagai angka statis.', auth: 'member', schema: data(ref('Balance')) }) },
   '/member/points/mutations': { get: op({ tag: 'Member — Poin', summary: 'Mutasi poin: masuk / hold / terpakai / lepas / koreksi (DSH-06)', auth: 'member', params: pagingParams, schema: page(ref('Mutation')) }) },
 
@@ -240,8 +249,16 @@ const paths = {
       auth: 'admin', params: [idParam()], body: { schema: obj({ status: str({ enum: ['aktif', 'nonaktif'] }), password: str({ minLength: 8 }) }) }, schema: data(ref('AdminAccount')), errors: [404, 409, 422],
     }),
   },
-  '/admin/members': { get: op({ tag: 'Admin — Pengguna', summary: 'Daftar member beserta saldo', auth: 'admin', params: [...pagingParams, q('q', 'Cari nama / email / no. HP'), q('status', 'Status akun', str({ enum: ['aktif', 'nonaktif'] }))], schema: page(ref('MemberRow')) }) },
+  '/admin/members': { get: op({ tag: 'Admin — Pengguna', summary: 'Daftar member beserta saldo, tier, dan progress tier', auth: 'admin', params: [...pagingParams, q('q', 'Cari nama / email / no. HP'), q('status', 'Status akun', str({ enum: ['aktif', 'nonaktif'] })), q('tier_id', 'Filter tier efektif', int()), q('tier_source', 'Filter sumber tier', str({ enum: ['manual', 'otomatis'] }))], schema: page(ref('MemberRow')) }) },
   '/admin/members/{id}': { patch: op({ tag: 'Admin — Pengguna', summary: 'Aktif/nonaktifkan akun member (sesi dicabut seketika)', auth: 'admin', params: [idParam()], body: { schema: obj({ status_akun: str({ enum: ['aktif', 'nonaktif'] }) }, ['status_akun']) }, schema: data(ref('MemberRow')), errors: [404, 422] }) },
+  '/admin/members/{id}/tier': {
+    patch: op({
+      tag: 'Admin — Tier', summary: 'Atur tier manual atau kembalikan ke evaluasi otomatis',
+      description: 'Tier manual bersifat persisten sampai admin mengirim `tier_id: null`. Perubahan, alasan, dan admin penanggung jawab dicatat pada riwayat tier dan audit log.',
+      auth: 'admin', params: [idParam()], body: { schema: obj({ tier_id: str({ nullable: true, pattern: '^[1-9]\\d*$', example: '2' }), alasan: str({ minLength: 3, maxLength: 500 }) }, ['tier_id', 'alasan']), example: { tier_id: '2', alasan: 'PromosiCampaignRONALDO' } },
+      schema: data(ref('MemberTier')), errors: [404, 422],
+    }),
+  },
   // --------------------------------------------------------- Admin: Tier & Progress
   '/admin/tiers': {
     get: op({ tag: 'Admin — Tier', summary: 'Daftar tier (tambahan.md poin 1)', auth: 'admin', schema: data(arr(ref('Tier'))) }),
@@ -252,12 +269,24 @@ const paths = {
     delete: op({ tag: 'Admin — Tier', summary: 'Hapus tier — hanya super_admin; ditolak bila masih dipakai member (409 `TIER_IN_USE`)', auth: 'admin', params: [idParam()], schema: obj({ message: str() }), errors: [404, 409] }),
   },
   '/admin/tiers/growth': { get: op({ tag: 'Admin — Tier', summary: 'Pertumbuhan tier per bulan (naik/turun)', auth: 'admin', params: [q('months', 'Jumlah bulan ke belakang', int({ default: 6 }))], schema: data(arr(obj({ bulan: str({ example: '2026-09' }), tier: str(), jumlah: int() }))) }) },
-  '/member/tier': { get: op({ tag: 'Member — Poin', summary: 'Tier saat ini & progress ke tier berikutnya (tambahan.md poin 1)', description: 'Basis default: total poin lifetime (masuk − koreksi), tidak berkurang saat redeem.', auth: 'member', schema: data(ref('TierProgress')) }) },
+  '/member/tier': { get: op({ tag: 'Member — Poin', summary: 'Tier saat ini & progress ke tier berikutnya (tambahan.md poin 1)', description: 'Basis default: total poin lifetime (masuk − koreksi), tidak berkurang saat redeem. Tier yang diberikan admin ditandai sebagai tier manual.', auth: 'member', schema: data(ref('TierProgress')) }) },
 
   // --------------------------------------------------------- Admin/Member: Voucher
-  '/admin/vouchers': { get: op({ tag: 'Admin — Voucher', summary: 'Daftar voucher (tambahan.md poin 3)', auth: 'admin', params: [...pagingParams, q('status', 'Status', str({ enum: ['active', 'reserved', 'used', 'expired', 'void'] })), q('q', 'Cari kode / nama member / email')], schema: page(ref('Voucher')) }) },
-  '/admin/vouchers/{id}/void': { post: op({ tag: 'Admin — Voucher', summary: 'Void voucher manual (belum dipakai)', auth: 'admin', params: [idParam()], body: reasonBody('Kesalahan input redeem.'), schema: data(ref('Voucher')), errors: [404, 409, 422] }) },
-  '/member/vouchers': { get: op({ tag: 'Member — Redeem', summary: 'Voucher milik sendiri (aktif & riwayat)', auth: 'member', params: [...pagingParams, q('status', 'Status')], schema: page(ref('Voucher')) }) },
+  '/admin/vouchers': {
+    get: op({ tag: 'Admin — Voucher', summary: 'Daftar voucher + ringkasan status (tambahan.md poin 3)', auth: 'admin', params: [...pagingParams, ...voucherFilters], schema: page(ref('Voucher'), { ringkasan: ref('VoucherSummary') }) }),
+    post: op({
+      tag: 'Admin — Voucher', summary: 'Generate voucher manual (single atau bulk) — poin member dipotong', auth: 'admin',
+      description: 'Setiap voucher dibuat dengan satu redeem berstatus `selesai` (sumber `manual`) sehingga poin tercatat resmi di ledger dan muncul di riwayat member. Maksimal 25 voucher per permintaan. Syarat tier & masa tampil reward tidak diperiksa; stok reward tetap dikurangi bila reward dibatasi. Ditolak bila saldo poin member tidak cukup (422).',
+      body: { schema: obj({ member_id: str(), reward_id: str(), jumlah: int({ minimum: 1, maximum: 25, default: 1 }), berlaku_hari: int({ minimum: 1, maximum: 3650, description: 'Kosongkan untuk memakai masa berlaku reward' }), catatan: str({ maxLength: 500 }) }, ['member_id', 'reward_id']), example: { member_id: '1', reward_id: '2', jumlah: 1, berlaku_hari: 30, catatan: 'Kompensasi keterlambatan proses struk' } },
+      ok: { 201: 'Voucher dibuat' }, schema: data(arr(ref('Voucher'))), errors: [404, 409, 422],
+    }),
+  },
+  '/admin/vouchers/maintenance': { post: op({ tag: 'Admin — Voucher', summary: 'Jalankan pembersihan expiry & reservasi sekarang (selain scheduler)', auth: 'admin', schema: obj({ data: obj({ expired: int(), released: int() }) }) }) },
+  '/admin/vouchers/{id}': { get: op({ tag: 'Admin — Voucher', summary: 'Detail voucher', auth: 'admin', params: [idParam()], schema: data(ref('Voucher')), errors: [404] }) },
+  '/admin/vouchers/{id}/extend': { post: op({ tag: 'Admin — Voucher', summary: 'Perpanjang masa berlaku voucher aktif', auth: 'admin', params: [idParam()], body: { schema: obj({ tambah_hari: int({ minimum: 1, maximum: 365 }), alasan: str({ minLength: 3, maxLength: 500 }) }, ['tambah_hari', 'alasan']), example: { tambah_hari: 14, alasan: 'Member belum sempat memakai sebelum kedaluwarsa.' } }, schema: data(ref('Voucher')), errors: [404, 409, 422] }) },
+  '/admin/vouchers/{id}/void': { post: op({ tag: 'Admin — Voucher', summary: 'Void voucher (belum dipakai)', auth: 'admin', description: 'Voucher sumber `manual` sekaligus membatalkan redeem manual dan mengembalikan poin ke saldo member. Voucher dari redeem yang sudah disetujui tidak mengembalikan poin.', params: [idParam()], body: reasonBody('Salah cetak kode voucher.'), schema: data(ref('Voucher')), errors: [404, 409, 422] }) },
+  '/member/vouchers': { get: op({ tag: 'Member — Redeem', summary: 'Voucher milik sendiri (aktif & riwayat) + jumlah per status', description: '`status` menerima satu nilai atau daftar dipisah koma, mis. `used,expired,void` untuk riwayat.', auth: 'member', params: [...pagingParams, q('status', 'Status (boleh lebih dari satu, dipisah koma)', voucherStatusEnum)], schema: page(ref('Voucher'), { ringkasan: ref('VoucherSummary') }) }) },
+  '/member/vouchers/cek': { get: op({ tag: 'Member — Redeem', summary: 'Cek satu kode voucher milik sendiri', description: 'Hanya kode milik member yang sedang login. Dipakai untuk tombol "Cek kode" — redemption tetap terjadi saat checkout di More by Morello.', auth: 'member', params: [q('kode', 'Kode voucher', str({ example: 'ALP-7K3QX9M2' }))], schema: data(ref('Voucher')), errors: [404, 422] }) },
 
   // --------------------------------------------------------- Admin: aturan poin per channel & manual adjustment
   '/admin/point-rules/channel': {
@@ -267,7 +296,7 @@ const paths = {
   '/admin/point-rules/channel/{channel}': { delete: op({ tag: 'Admin — Pengaturan', summary: 'Hapus override channel (kembali memakai aturan global) — hanya super_admin', auth: 'admin', params: [{ name: 'channel', in: 'path', required: true, schema: str() }], schema: obj({ message: str() }), errors: [404] }) },
   '/admin/members/{id}/points': { post: op({ tag: 'Admin — Pengguna', summary: 'Penyesuaian poin manual (Admin Dashboard poin 6)', description: 'Jumlah boleh negatif; pengurangan ditolak bila melebihi saldo tersedia (422 `INSUFFICIENT_BALANCE`).', auth: 'admin', params: [idParam()], body: { schema: obj({ jumlah: int({ example: 20 }), alasan: str({ minLength: 3 }) }, ['jumlah', 'alasan']) }, schema: data(ref('Balance')), errors: [404, 422] }) },
   '/admin/members/{id}/points/mutations': { get: op({ tag: 'Admin — Pengguna', summary: 'Mutasi poin member (sudut pandang admin)', auth: 'admin', params: [idParam(), ...pagingParams], schema: page(ref('Mutation')) }) },
-  '/admin/members/{id}/tier-history': { get: op({ tag: 'Admin — Pengguna', summary: 'Riwayat perubahan tier member', auth: 'admin', params: [idParam()], schema: data(arr(obj({ id: str(), dari: str({ nullable: true }), ke: str({ nullable: true }), sebab: str({ enum: ['otomatis', 'manual'] }), created_at: str({ format: 'date-time' }) }))) }) },
+  '/admin/members/{id}/tier-history': { get: op({ tag: 'Admin — Pengguna', summary: 'Riwayat perubahan tier member', auth: 'admin', params: [idParam()], schema: data(arr(obj({ id: str(), dari_tier_id: str({ nullable: true }), ke_tier_id: str({ nullable: true }), dari: str({ nullable: true }), ke: str({ nullable: true }), sebab: str({ enum: ['otomatis', 'manual'] }), alasan: str({ nullable: true }), admin_nama: str({ nullable: true }), created_at: str({ format: 'date-time' }) }))) }) },
 
   // --------------------------------------------------------- Admin: Dashboard (metrics, log integrasi, export)
   '/admin/metrics': { get: op({ tag: 'Admin — Dashboard', summary: 'Metrik dasar: member aktif, poin beredar, redemption rate, top reward, sebaran tier (Admin Dashboard poin 6)', auth: 'admin', schema: data(ref('Metrics')) }) },
@@ -275,6 +304,7 @@ const paths = {
   '/admin/export/members.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export member ke CSV', security: [{ bearerAuth: [] }], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403) } } },
   '/admin/export/redeems.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export redeem ke CSV', security: [{ bearerAuth: [] }], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403) } } },
   '/admin/export/receipts.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export struk ke CSV', security: [{ bearerAuth: [] }], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403) } } },
+  '/admin/export/vouchers.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export laporan redemption voucher ke CSV', description: 'Mengikuti filter yang sama dengan `GET /admin/vouchers` (`status`, `sumber`, `q`, `from`, `to`), tanpa pagination.', security: [{ bearerAuth: [] }], parameters: [...voucherFilters], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403, 422) } } },
 
   // --------------------------------------------------------- Integrasi More by Morello
   '/integrations/more/transaction': {
@@ -345,7 +375,7 @@ const schemas = {
   Reward: obj({ id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(), gambar_url: str({ nullable: true }) }),
   RewardAdmin: obj({ id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(), aktif: bool(), gambar_url: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
   RewardInput: obj({ nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int({ minimum: 1 }), aktif: bool({ default: true }) }, ['nama', 'poin_dibutuhkan']),
-  Mutation: obj({ id: str(), jenis: str({ enum: ['masuk', 'hold', 'terpakai', 'lepas', 'koreksi'] }), jumlah: int(), referensi_tipe: str({ enum: ['receipt', 'redeem', 'koreksi'] }), referensi_id: str(), keterangan: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
+  Mutation: obj({ id: str(), jenis: str({ enum: ['masuk', 'hold', 'terpakai', 'lepas', 'koreksi', 'kembalian'] }), jumlah: int(), referensi_tipe: str({ enum: ['receipt', 'redeem', 'koreksi'] }), referensi_id: str(), keterangan: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
   Notification: obj({ id: str(), jenis_kejadian: str({ enum: ['struk_disetujui', 'struk_ditolak', 'redeem_diajukan', 'redeem_disetujui', 'redeem_ditolak'] }), isi: str(), kanal: str({ example: 'in_app' }), referensi_tipe: str({ nullable: true }), referensi_id: str({ nullable: true }), dibaca_at: str({ format: 'date-time', nullable: true }), created_at: str({ format: 'date-time' }) }),
   AutoApproveCriteria: obj({ id: str(), kode: str({ enum: ['channel', 'batas_nominal'] }), kriteria: str(), nilai: { type: 'object' }, aktif: bool(), updated_at: str({ format: 'date-time' }) }),
   Settings: obj({
@@ -353,11 +383,13 @@ const schemas = {
     claim_window_days: int(), min_nominal: num(), max_file_size_mb: int({ maximum: 20 }), max_files: int({ maximum: 10 }), channels: arr(str()), terms_text: str(),
   }, ['point_rule', 'claim_window_days', 'min_nominal', 'max_file_size_mb', 'max_files', 'channels']),
   AdminAccount: obj({ id: str(), nama: str(), email: str(), status: str({ enum: ['aktif', 'nonaktif'] }), created_at: str({ format: 'date-time' }) }),
-  MemberRow: obj({ id: str(), nama: str(), email: str({ nullable: true }), no_hp: str({ nullable: true }), status_akun: str({ enum: ['aktif', 'nonaktif'] }), created_at: str({ format: 'date-time' }), total: int(), tersedia: int(), jumlah_struk: int() }),
+  MemberRow: obj({ id: str(), nama: str(), email: str({ nullable: true }), no_hp: str({ nullable: true }), status_akun: str({ enum: ['aktif', 'nonaktif'] }), created_at: str({ format: 'date-time' }), current_tier_id: str({ nullable: true }), manual_tier_id: str({ nullable: true }), tier_manual: bool(), current_tier_nama: str({ nullable: true }), tier_otomatis_nama: str({ nullable: true }), tier_berikutnya_nama: str({ nullable: true }), poin_lifetime: int(), poin_dibutuhkan: int(), persen: int(), total: int(), tersedia: int(), jumlah_struk: int() }),
   Tier: obj({ id: str(), nama: str(), urutan: int(), min_poin: int(), benefit: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
   TierInput: obj({ nama: str(), urutan: int({ minimum: 1 }), min_poin: int({ minimum: 0 }), benefit: str({ nullable: true }) }, ['nama', 'urutan', 'min_poin']),
-  TierProgress: obj({ tier_saat_ini: { allOf: [ref('Tier')], nullable: true }, tier_berikutnya: { allOf: [ref('Tier')], nullable: true }, poin_saat_ini: int(), poin_dibutuhkan: int(), persen: int(), semua_tier: arr(ref('Tier')) }),
-  Voucher: obj({ id: str(), kode: str({ example: 'ALP-7K3QX9M2' }), member_id: str(), reward_id: str(), reward_nama: str(), redeem_id: str(), status: str({ enum: ['active', 'reserved', 'used', 'expired', 'void'] }), issued_at: str({ format: 'date-time' }), expires_at: str({ format: 'date-time' }), reserved_until: str({ format: 'date-time', nullable: true }), used_at: str({ format: 'date-time', nullable: true }), void_reason: str({ nullable: true }) }),
+  TierProgress: obj({ tier_saat_ini: { allOf: [ref('Tier')], nullable: true }, tier_berikutnya: { allOf: [ref('Tier')], nullable: true }, tier_otomatis: { allOf: [ref('Tier')], nullable: true }, tier_manual: bool(), poin_saat_ini: int(), poin_dibutuhkan: int(), persen: int(), semua_tier: arr(ref('Tier')) }),
+  MemberTier: { allOf: [obj({ id: str(), nama: str() }), ref('TierProgress')] },
+  Voucher: obj({ id: str(), kode: str({ example: 'ALP-7K3QX9M2' }), member_id: str(), member_nama: str(), member_email: str({ nullable: true }), reward_id: str(), reward_nama: str(), redeem_id: str(), jumlah_poin: int({ nullable: true, description: 'Hanya pada detail voucher' }), status: str({ enum: ['active', 'reserved', 'used', 'expired', 'void'] }), status_efektif: str({ enum: ['active', 'reserved', 'used', 'expired', 'void'], description: 'Status setelah disesuaikan dengan waktu sekarang (voucher yang sudah lewat masa berlaku tampil `expired` walau scheduler belum sempat jalan)' }), issued_at: str({ format: 'date-time' }), expires_at: str({ format: 'date-time' }), reserved_until: str({ format: 'date-time', nullable: true }), used_at: str({ format: 'date-time', nullable: true }), used_order_id: str({ nullable: true }), void_reason: str({ nullable: true }), voided_oleh_nama: str({ nullable: true }), sumber: str({ enum: ['redeem', 'manual'] }), dibuat_oleh: str({ nullable: true }), dibuat_oleh_nama: str({ nullable: true }), catatan: str({ nullable: true }) }),
+  VoucherSummary: obj({ total: int(), aktif: int(), dipesan: int({ description: 'Sedang dipakai di checkout More' }), terpakai: int(), kedaluwarsa: int(), dibatalkan: int(), manual: int(), akan_kedaluwarsa: int({ description: 'Voucher aktif yang habis dalam 7 hari ke depan' }) }),
   ChannelPointRule: obj({ channel: str(), rupiah_per_poin: int(), pembulatan: str({ enum: ['bawah', 'atas', 'terdekat'] }), minimal_transaksi: num(), updated_at: str({ format: 'date-time' }) }),
   Metrics: obj({ member_total: int(), member_aktif: int(), poin_beredar: int(), redemption_rate: int({ description: 'Persen' }), top_reward: arr(obj({ nama: str(), jumlah: int() })), tier: arr(obj({ nama: str(), jumlah_member: int() })), voucher: { type: 'object', additionalProperties: int() } }),
   IntegrationLog: obj({ id: str(), integrasi: str(), arah: str({ enum: ['masuk', 'keluar'] }), endpoint: str(), request_id: str({ nullable: true }), status_kode: int({ nullable: true }), payload: { type: 'object' }, hasil: { type: 'object' }, error: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),

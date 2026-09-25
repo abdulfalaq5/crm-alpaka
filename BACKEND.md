@@ -14,7 +14,7 @@ Kode kebutuhan (REG-xx, UPL-xx, dst.), aturan bisnis (BR-xx), dan item terbuka (
    - `admins` (id, nama, email, password_hash, status)
    - `receipts` / struk (id, member_id, channel, nomor_transaksi, tanggal_transaksi, nominal, file_url, status, hasil_validasi, mode_persetujuan, alasan_penolakan, diputuskan_oleh, waktu_keputusan)
    - `auto_approve_criteria` (id, kriteria, aktif, diubah_oleh, updated_at)
-   - `points_ledger` (id, member_id, jenis[masuk/hold/terpakai/lepas], jumlah, referensi_tipe, referensi_id, created_at)
+   - `points_ledger` (id, member_id, jenis[masuk/hold/terpakai/lepas/koreksi/kembalian], jumlah, referensi_tipe, referensi_id, created_at)
    - `rewards` (id, nama, poin_dibutuhkan, aktif)
    - `redeems` (id, member_id, reward_id, jumlah_poin, status, alasan_penolakan, detail_pemberian, diputuskan_oleh, waktu_keputusan)
    - `notifications` (id, member_id, jenis_kejadian, isi, kanal, status_kirim, created_at)
@@ -122,6 +122,22 @@ Jalankan sebagai service terpisah yang dipanggil otomatis setelah upload (Modul 
 
 ---
 
+## 6B. Modul Voucher Management (VCH — tambahan.md poin 3 & 6)
+
+Layanan: `backend/src/services/vouchers.js`. Semua operasi tulis membungkus baris member (`SELECT … FOR UPDATE`) dan baris voucher di dalam transaksi atomik agar request bersamaan tidak membalik status atau	do membakar saldo (NFR-05, BR-09).
+
+1. **Terbit saat approve** — kode `ALP-XXXXXXXX` (prefix tetap + 8 karakter acak dari alphabet tanpa karakter ambigu), `vouchers.sumber = 'redeem'`, masa berlaku dari `rewards.berlaku_hari` (default 30 hari).
+2. **Generate manual oleh admin** — `POST /admin/vouchers` (`member_id`, `reward_id`, `jumlah` 1–25, `berlaku_hari` opsional, `catatan` opsional). Voucher manual tetap terikat ke satu redeem (`sumber = 'manual'`, status `selesai`) supaya transaksi poin dan laporan 1:1 — bukan voucher "melayang" tanpa jejak. Pemeriksaan: member aktif, reward ada, saldo **tersedia** cukup, dan stok cukup (bila reward dibatasi).
+3. **Potong poin saat generate manual** — dua entri `points_ledger` dalam transaksi yang sama: `hold` lalu `terpakai`. Kedua entri saling meniadakan di `hitungSaldo` (`ditahan = hold − lepas − terpakai`), jadi saldo "ditahan" tetap benar dan tidak pernah negatif karena entri `terpakai` yang tidak punya pasangan `hold`.
+4. **Status** — `active` → `reserved` (validasi checkout) → `used` / kembali `active` (reservasi lewat) / `expired` / `void`. Kolom `status` menyimpan status transisi; `status_efektif` dihitung saat baca (`efektifStatus`) supaya voucher yang lewat tanggal langsung tampil `expired` di UI dan laporan meski scheduler belum jalan.
+5. **Perpanjang masa berlaku** — `POST /admin/vouchers/:id/extend` (`tambah_hari` 1–365 + `alasan` wajib). Hanya voucher `active`; status lain → 409 `ALREADY_FINAL`. Tercatat di `audit_logs` bersama nilai lama & baru.
+6. **Void** — `POST /admin/vouchers/:id/void` (`alasan` wajib). Voucher dari redeem biasa (`sumber = 'redeem'`) hanya pencabutan kode, poin redemption tidak disentuh. Voucher manual additionally: redeem-nya jadi `dibatalkan` dan poin dikembalikan sebagai entri **`kembalian`** (bukan `koreksi` yang justru mengurangi total, dan bukan `masuk` yang akan ikut menaikkan Lifetime Points/tier). Voucher `reserved` boleh di-void (kode bocor saat di keranjang) dan reservasinya dilepas sekalian supaya order di More tidak menggantung.
+7. **Laporan & filter** — `GET /admin/vouchers` dengan `status` (satu nilai atau daftar dipisah koma), `sumber`, `q` (kode/nama/email member/nama reward), `from`/`to` (inklusif sampai akhir hari tersebut), plus `meta.ringkasan` untuk kartu statistik. `GET /admin/export/vouchers.csv` memakai filter yang sama dan menulis **status efektif**.
+8. **Membersihkan sendiri** — `POST /admin/vouchers/maintenance` untuk menjalankan expiry & pelepasan reservasi saat itu juga; endpoint yang sama dijalankan otomatis oleh scheduler tiap `MAINTENANCE_INTERVAL_MINUTES` (default 10).
+9. **Sisi member (baca saja)** — `GET /member/vouchers` (kartu voucher aktif + riwayat, `status` menerima daftar dipisah koma) dan `GET /member/vouchers/cek?kode=…` untuk mengecek kode milik member yang sedang login. Kode milik member lain dijawab 404 `VOUCHER_NOT_FOUND` (identik dengan kode tidak ada) supaya keberadaan kode tidak bocor. Endpoint integrasi More tetap satu-satunya penanda `reserved`/`used` — member tidak bisa menukar vouchernya sendiri.
+
+---
+
 ## 7. Modul Notifikasi (NTF)
 
 1. Buat service/event listener yang dipicu otomatis saat status berubah pada 5 kejadian berikut (NTF-01):
@@ -144,8 +160,10 @@ Jalankan sebagai service terpisah yang dipanggil otomatis setelah upload (Modul 
 1. `GET /member/dashboard` — ringkasan saldo poin (total/ditahan/tersedia).
 2. `GET /member/receipts` — riwayat upload struk (tanggal, channel, nominal, status, poin diperoleh) (DSH-02).
 3. `GET /member/redeems` — riwayat redeem beserta status (DSH-03).
-4. `GET /member/points/mutations` — mutasi poin dari `points_ledger` (masuk/hold/terpakai/lepas) untuk ditampilkan sebagai riwayat detail (DSH-06, disarankan).
+4. `GET /member/points/mutations` — mutasi poin dari `points_ledger` (masuk/hold/terpakai/lepas/koreksi/kembalian) untuk ditampilkan sebagai riwayat detail (DSH-06, disarankan).
 5. Pastikan setiap response mendukung detail on-demand (bukan hanya ringkasan) agar frontend bisa menampilkan detail item riwayat termasuk alasan penolakan (DSH-04).
+6. `GET /member/vouchers` — kartu voucher aktif + riwayat, dengan `meta.ringkasan` (total/aktif/dipesan/terpakai/kedaluwarsa/dibatalkan/akan kedaluwarsa ≤ 7 hari). Ringkasan menghitung **hanya** voucher member tersebut — query yang sama dipakai admin dipanggil dengan `memberId` agar data global tidak bocor.
+7. `GET /member/vouchers/cek?kode=…` — cek kode voucher milik sendiri.
 
 ---
 

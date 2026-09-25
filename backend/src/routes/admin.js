@@ -339,28 +339,57 @@ router.patch('/admins/:id', superOnly, asyncHandler(async (req, res) => {
 // ---- Manajemen member: daftar dengan saldo, aktif/nonaktifkan akun ----
 router.get('/members', asyncHandler(async (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
+  const memberFilters = validate(Joi.object({
+    tier_id: Joi.string().pattern(/^[1-9]\d*$/).allow(''),
+    tier_source: Joi.string().valid('manual', 'otomatis'),
+  }).unknown(true), req.query);
   const params = [];
   const where = [];
   if (req.query.status) { params.push(req.query.status); where.push(`m.status_akun = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); where.push(`(m.nama ILIKE $${params.length} OR m.email ILIKE $${params.length} OR m.no_hp ILIKE $${params.length})`); }
+  if (memberFilters.tier_source === 'manual') where.push('m.manual_tier_id IS NOT NULL');
+  if (memberFilters.tier_source === 'otomatis') where.push('m.manual_tier_id IS NULL');
+  if (memberFilters.tier_id) {
+    params.push(memberFilters.tier_id);
+    where.push(`m.current_tier_id = $${params.length}`);
+  }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const { rows: count } = await pool.query(`SELECT COUNT(*)::int AS total FROM members m ${clause}`, params);
-  const { rows } = await pool.query(
-    `SELECT m.id, m.nama, m.email, m.no_hp, m.status_akun, m.created_at,
-            COALESCE(s.masuk, 0) - COALESCE(s.terpakai, 0) - COALESCE(s.koreksi, 0) AS total,
-            COALESCE(s.masuk, 0) - COALESCE(s.hold, 0) + COALESCE(s.lepas, 0) - COALESCE(s.koreksi, 0) AS tersedia,
-            (SELECT COUNT(*)::int FROM receipts r WHERE r.member_id = m.id) AS jumlah_struk
-       FROM members m
-       LEFT JOIN (
-         SELECT member_id,
-                SUM(jumlah) FILTER (WHERE jenis = 'masuk')::int AS masuk, SUM(jumlah) FILTER (WHERE jenis = 'hold')::int AS hold,
-                SUM(jumlah) FILTER (WHERE jenis = 'terpakai')::int AS terpakai, SUM(jumlah) FILTER (WHERE jenis = 'lepas')::int AS lepas,
-                SUM(jumlah) FILTER (WHERE jenis = 'koreksi')::int AS koreksi
-           FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
-       ${clause} ORDER BY m.created_at DESC, m.id DESC LIMIT ${limit} OFFSET ${offset}`,
-    params
-  );
-  res.json({ data: rows, meta: { page, limit, total: count[0].total } });
+  const [countResult, memberResult, tiers] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS total FROM members m ${clause}`, params),
+    pool.query(
+      `SELECT m.id, m.nama, m.email, m.no_hp, m.status_akun, m.created_at, m.current_tier_id, m.manual_tier_id,
+              COALESCE(s.masuk, 0) + COALESCE(s.kembalian, 0) - COALESCE(s.terpakai, 0) - COALESCE(s.koreksi, 0) AS total,
+              COALESCE(s.masuk, 0) - COALESCE(s.koreksi, 0) AS poin_lifetime,
+              COALESCE(s.masuk, 0) + COALESCE(s.kembalian, 0) - COALESCE(s.hold, 0) + COALESCE(s.lepas, 0) - COALESCE(s.koreksi, 0) AS tersedia,
+              (SELECT COUNT(*)::int FROM receipts r WHERE r.member_id = m.id) AS jumlah_struk
+         FROM members m
+         LEFT JOIN (
+           SELECT member_id,
+                  SUM(jumlah) FILTER (WHERE jenis = 'masuk')::int AS masuk, SUM(jumlah) FILTER (WHERE jenis = 'hold')::int AS hold,
+                  SUM(jumlah) FILTER (WHERE jenis = 'terpakai')::int AS terpakai, SUM(jumlah) FILTER (WHERE jenis = 'lepas')::int AS lepas,
+                  SUM(jumlah) FILTER (WHERE jenis = 'koreksi')::int AS koreksi, SUM(jumlah) FILTER (WHERE jenis = 'kembalian')::int AS kembalian
+             FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
+         ${clause} ORDER BY m.created_at DESC, m.id DESC LIMIT ${limit} OFFSET ${offset}`,
+      params
+    ),
+    tiersService.listTiers(pool),
+  ]);
+  const data = memberResult.rows.map((row) => {
+    const memberProgress = tiersService.progress(tiers, row.poin_lifetime, {
+      currentTierId: row.current_tier_id,
+      manual: row.manual_tier_id !== null,
+    });
+    return {
+      ...row,
+      tier_manual: row.manual_tier_id !== null,
+      current_tier_nama: memberProgress.tier_saat_ini?.nama || null,
+      tier_otomatis_nama: memberProgress.tier_otomatis?.nama || null,
+      tier_berikutnya_nama: memberProgress.tier_berikutnya?.nama || null,
+      poin_dibutuhkan: memberProgress.poin_dibutuhkan,
+      persen: memberProgress.persen,
+    };
+  });
+  res.json({ data, meta: { page, limit, total: countResult.rows[0].total } });
 }));
 
 router.patch('/members/:id', writeAccess, asyncHandler(async (req, res) => {
@@ -375,6 +404,27 @@ router.patch('/members/:id', writeAccess, asyncHandler(async (req, res) => {
     await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: v.status_akun === 'aktif' ? 'member.aktifkan' : 'member.nonaktifkan', objekTipe: 'member', objekId: rows[0].id });
     return rows[0];
   });
+  res.json({ data: row });
+}));
+
+router.patch('/members/:id/tier', writeAccess, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({
+    tier_id: Joi.string().pattern(/^[1-9]\d*$/).allow(null).required().messages({
+      'any.required': 'Tier tujuan wajib diisi',
+      'string.pattern.base': 'Tier tujuan tidak valid',
+    }),
+    alasan: Joi.string().trim().min(3).max(500).required().messages({
+      'any.required': 'Alasan wajib diisi',
+      'string.empty': 'Alasan wajib diisi',
+      'string.min': 'Alasan terlalu pendek',
+    }),
+  }), req.body);
+  const row = await withTransaction((client) => tiersService.assignTier(client, {
+    memberId: req.params.id,
+    tierId: v.tier_id,
+    reason: v.alasan,
+    adminId: req.user.id,
+  }));
   res.json({ data: row });
 }));
 
@@ -393,12 +443,14 @@ router.get('/tiers', asyncHandler(async (req, res) => {
 router.post('/tiers', superOnly, asyncHandler(async (req, res) => {
   const v = validate(tierSchema, req.body);
   try {
-    const { rows } = await withTransaction(async (client) => {
-      const r = await client.query('INSERT INTO tiers (nama, urutan, min_poin, benefit) VALUES ($1,$2,$3,$4) RETURNING *', [v.nama, v.urutan, v.min_poin, v.benefit || null]);
-      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.buat', objekTipe: 'tier', objekId: r.rows[0].id, detail: v });
-      return r;
+    const row = await withTransaction(async (client) => {
+      await tiersService.validateTierDefinition(client, v);
+      const { rows } = await client.query('INSERT INTO tiers (nama, urutan, min_poin, benefit) VALUES ($1,$2,$3,$4) RETURNING *', [v.nama, v.urutan, v.min_poin, v.benefit || null]);
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.buat', objekTipe: 'tier', objekId: rows[0].id, detail: v });
+      await tiersService.reevaluateAll(client);
+      return rows[0];
     });
-    res.status(201).json({ data: rows[0] });
+    res.status(201).json({ data: row });
   } catch (err) {
     if (err.code === '23505') throw conflict('Urutan tier sudah dipakai tier lain.', 'ORDER_TAKEN');
     throw err;
@@ -409,9 +461,13 @@ router.put('/tiers/:id', superOnly, asyncHandler(async (req, res) => {
   const v = validate(tierSchema, req.body);
   try {
     const row = await withTransaction(async (client) => {
+      await tiersService.validateTierDefinition(client, v, req.params.id);
+      const { rows: existing } = await client.query('SELECT urutan, min_poin FROM tiers WHERE id = $1', [req.params.id]);
+      if (!existing.length) throw notFound('Tier tidak ditemukan');
+      const definitionChanged = Number(existing[0].urutan) !== v.urutan || Number(existing[0].min_poin) !== v.min_poin;
       const { rows } = await client.query('UPDATE tiers SET nama=$2, urutan=$3, min_poin=$4, benefit=$5 WHERE id=$1 RETURNING *', [req.params.id, v.nama, v.urutan, v.min_poin, v.benefit || null]);
-      if (!rows.length) throw notFound('Tier tidak ditemukan');
       await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.ubah', objekTipe: 'tier', objekId: rows[0].id, detail: v });
+      if (definitionChanged) await tiersService.reevaluateAll(client);
       return rows[0];
     });
     res.json({ data: row });
@@ -422,12 +478,26 @@ router.put('/tiers/:id', superOnly, asyncHandler(async (req, res) => {
 }));
 
 router.delete('/tiers/:id', superOnly, asyncHandler(async (req, res) => {
-  const { rows: used } = await pool.query('SELECT COUNT(*)::int AS n FROM members WHERE current_tier_id = $1', [req.params.id]);
-  if (used[0].n > 0) throw conflict(`Tier masih dipakai ${used[0].n} member, tidak dapat dihapus. Nonaktifkan dengan mengatur urutan/threshold sebagai gantinya.`, 'TIER_IN_USE');
-  const { rowCount } = await pool.query('DELETE FROM tiers WHERE id = $1', [req.params.id]);
-  if (!rowCount) throw notFound('Tier tidak ditemukan');
-  await audit(pool, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.hapus', objekTipe: 'tier', objekId: req.params.id });
-  res.json({ message: 'ok' });
+  try {
+    await withTransaction(async (client) => {
+      await tiersService.lockTierDefinitions(client);
+      const { rows: used } = await client.query(
+        `SELECT (SELECT COUNT(*)::int FROM members WHERE current_tier_id = $1) AS member,
+                (SELECT COUNT(*)::int FROM rewards WHERE tier_minimum_id = $1) AS reward`,
+        [req.params.id]
+      );
+      if (used[0].member > 0 || used[0].reward > 0) {
+        throw conflict(`Tier masih digunakan oleh ${used[0].member} member dan ${used[0].reward} reward, tidak dapat dihapus.`, 'TIER_IN_USE');
+      }
+      const { rowCount } = await client.query('DELETE FROM tiers WHERE id = $1', [req.params.id]);
+      if (!rowCount) throw notFound('Tier tidak ditemukan');
+      await audit(client, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'tier.hapus', objekTipe: 'tier', objekId: req.params.id });
+    });
+    res.json({ message: 'ok' });
+  } catch (err) {
+    if (err.code === '23503') throw conflict('Tier pernah digunakan dan tidak dapat dihapus.', 'TIER_IN_USE');
+    throw err;
+  }
 }));
 
 router.get('/tiers/growth', asyncHandler(async (req, res) => {
@@ -435,8 +505,80 @@ router.get('/tiers/growth', asyncHandler(async (req, res) => {
 }));
 
 // ---- Voucher Management (tambahan.md poin 3) ----
+// Filter halaman voucher. `status` menerima satu nilai atau daftar dipisah koma (mis. ?status=active,void).
+const STATUS_VOUCHER = ['active', 'reserved', 'used', 'expired', 'void'];
+const voucherFilterSchema = Joi.object({
+  status: Joi.string()
+    .custom((value, helpers) => (value.split(',').every((s) => STATUS_VOUCHER.includes(s)) ? value : helpers.message({ custom: 'Status voucher tidak dikenal' }))),
+  sumber: Joi.string().valid('redeem', 'manual'),
+  q: Joi.string().trim().max(120),
+  from: Joi.date().iso(),
+  to: Joi.date().iso(),
+}).unknown(true);
+
 router.get('/vouchers', asyncHandler(async (req, res) => {
-  res.json(await vouchersService.listVouchers({ status: req.query.status, q: req.query.q, pagination: parsePagination(req.query) }));
+  const f = validate(voucherFilterSchema, req.query);
+  res.json(await vouchersService.listVouchers({ ...f, pagination: parsePagination(req.query), ringkasan: true }));
+}));
+
+// Jalankan pembersihan expiry & reservasi sekarang (selain scheduler) tanpa perlu menunggu interval.
+router.post('/vouchers/maintenance', writeAccess, asyncHandler(async (req, res) => {
+  const hasil = await vouchersService.runMaintenance();
+  await audit(pool, { pelakuTipe: 'admin', pelakuId: req.user.id, aksi: 'voucher.maintenance', objekTipe: 'voucher', detail: hasil });
+  res.json({ data: hasil });
+}));
+
+router.post('/vouchers', writeAccess, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({
+    member_id: Joi.number().integer().positive().required().messages({
+      'any.required': 'Pilih member', 'number.base': 'Member tidak valid', 'number.positive': 'Member tidak valid',
+    }),
+    reward_id: Joi.number().integer().positive().required().messages({
+      'any.required': 'Pilih reward', 'number.base': 'Reward tidak valid', 'number.positive': 'Reward tidak valid',
+    }),
+    jumlah: Joi.number().integer().min(1).max(vouchersService.MAX_BULK).default(1).messages({
+      'any.required': 'Isi jumlah voucher',
+      'number.base': 'Jumlah voucher harus berupa angka',
+      'number.min': 'Jumlah voucher minimal 1',
+      'number.max': `Jumlah voucher maksimal ${vouchersService.MAX_BULK} per permintaan`,
+    }),
+    berlaku_hari: Joi.number().integer().min(1).max(3650).messages({
+      'number.base': 'Masa berlaku harus berupa angka',
+      'number.min': 'Masa berlaku minimal 1 hari',
+      'number.max': 'Masa berlaku maksimal 3650 hari',
+    }),
+    catatan: Joi.string().trim().max(500).allow('').messages({ 'string.max': 'Catatan maksimal 500 karakter' }),
+  }), req.body);
+  res.status(201).json({
+    data: await vouchersService.createManual({
+      memberId: v.member_id,
+      rewardId: v.reward_id,
+      jumlah: v.jumlah,
+      berlakuHari: v.berlaku_hari || null,
+      catatan: v.catatan || null,
+      adminId: req.user.id,
+    }),
+  });
+}));
+
+router.get('/vouchers/:id', asyncHandler(async (req, res) => {
+  res.json({ data: await vouchersService.getVoucher(req.params.id) });
+}));
+
+router.post('/vouchers/:id/extend', writeAccess, asyncHandler(async (req, res) => {
+  const v = validate(Joi.object({
+    tambah_hari: Joi.number().integer().min(1).max(365).required().messages({
+      'any.required': 'Isi jumlah hari perpanjangan',
+      'number.base': 'Jumlah hari harus berupa angka',
+      'number.min': 'Perpanjangan minimal 1 hari',
+      'number.max': 'Perpanjangan maksimal 365 hari',
+    }),
+    alasan: Joi.string().trim().min(3).max(500).required().messages({
+      'any.required': 'Alasan wajib diisi', 'string.empty': 'Alasan wajib diisi',
+      'string.min': 'Alasan terlalu pendek', 'string.max': 'Alasan maksimal 500 karakter',
+    }),
+  }), req.body);
+  res.json({ data: await vouchersService.extendExpiry({ id: req.params.id, adminId: req.user.id, tambahHari: v.tambah_hari, alasan: v.alasan }) });
 }));
 
 router.post('/vouchers/:id/void', writeAccess, asyncHandler(async (req, res) => {
@@ -511,9 +653,13 @@ router.get('/members/:id/points/mutations', asyncHandler(async (req, res) => {
 
 router.get('/members/:id/tier-history', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT h.id, td.nama AS dari, tk.nama AS ke, h.sebab, h.created_at
-       FROM member_tier_history h LEFT JOIN tiers td ON td.id = h.dari_tier_id LEFT JOIN tiers tk ON tk.id = h.ke_tier_id
-      WHERE h.member_id = $1 ORDER BY h.created_at DESC`,
+    `SELECT h.id, h.dari_tier_id, h.ke_tier_id, td.nama AS dari, tk.nama AS ke,
+            h.sebab, h.alasan, a.nama AS admin_nama, h.created_at
+       FROM member_tier_history h
+       LEFT JOIN tiers td ON td.id = h.dari_tier_id
+       LEFT JOIN tiers tk ON tk.id = h.ke_tier_id
+       LEFT JOIN admins a ON a.id = h.diubah_oleh
+      WHERE h.member_id = $1 ORDER BY h.created_at DESC, h.id DESC`,
     [req.params.id]
   );
   res.json({ data: rows });
@@ -540,9 +686,9 @@ router.get('/integration-logs', asyncHandler(async (req, res) => {
 router.get('/export/members.csv', asyncHandler(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT m.nama, m.email, m.no_hp, m.status_akun, m.created_at, t.nama AS tier,
-            COALESCE(s.masuk,0) - COALESCE(s.terpakai,0) - COALESCE(s.koreksi,0) AS total
+            COALESCE(s.masuk,0) + COALESCE(s.kembalian,0) - COALESCE(s.terpakai,0) - COALESCE(s.koreksi,0) AS total
        FROM members m LEFT JOIN tiers t ON t.id = m.current_tier_id
-       LEFT JOIN (SELECT member_id, SUM(jumlah) FILTER (WHERE jenis='masuk') masuk, SUM(jumlah) FILTER (WHERE jenis='terpakai') terpakai, SUM(jumlah) FILTER (WHERE jenis='koreksi') koreksi FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
+       LEFT JOIN (SELECT member_id, SUM(jumlah) FILTER (WHERE jenis='masuk') masuk, SUM(jumlah) FILTER (WHERE jenis='terpakai') terpakai, SUM(jumlah) FILTER (WHERE jenis='koreksi') koreksi, SUM(jumlah) FILTER (WHERE jenis='kembalian') kembalian FROM points_ledger GROUP BY member_id) s ON s.member_id = m.id
       ORDER BY m.id`
   );
   sendCsv(res, 'member.csv', rows, [
@@ -562,6 +708,22 @@ router.get('/export/redeems.csv', asyncHandler(async (req, res) => {
     { label: 'Member', value: 'member' }, { label: 'Reward', value: 'reward' }, { label: 'Poin', value: 'jumlah_poin' },
     { label: 'Status', value: 'status' }, { label: 'Kode Voucher', value: 'voucher' },
     { label: 'Diajukan', value: (r) => r.created_at }, { label: 'Diputuskan', value: (r) => r.waktu_keputusan },
+  ]);
+}));
+
+router.get('/export/vouchers.csv', asyncHandler(async (req, res) => {
+  const f = validate(voucherFilterSchema, req.query);
+  const rows = await vouchersService.listForExport(f);
+  const labelStatus = { active: 'Aktif', reserved: 'Dipakai di Checkout', used: 'Terpakai', expired: 'Kedaluwarsa', void: 'Dibatalkan' };
+  sendCsv(res, 'voucher.csv', rows, [
+    { label: 'Kode', value: 'kode' }, { label: 'Member', value: 'member' }, { label: 'Email', value: 'email' },
+    { label: 'Reward', value: 'reward' }, { label: 'Poin', value: 'jumlah_poin' },
+    { label: 'Sumber', value: (r) => (r.sumber === 'manual' ? 'Manual' : 'Redeem') },
+    { label: 'Status', value: (r) => labelStatus[r.status_efektif] || r.status_efektif },
+    { label: 'Diterbitkan', value: (r) => r.issued_at },
+    { label: 'Berlaku Sampai', value: (r) => r.expires_at }, { label: 'Dipakai', value: (r) => r.used_at },
+    { label: 'No. Order', value: 'used_order_id' }, { label: 'Dibatalkan', value: (r) => r.voided_at },
+    { label: 'Alasan Void', value: 'void_reason' }, { label: 'Catatan', value: 'catatan' },
   ]);
 }));
 

@@ -119,16 +119,40 @@ router.get('/member/points', asyncHandler(async (req, res) => res.json({ data: a
 router.get(
   '/member/tier',
   asyncHandler(async (req, res) => {
-    const [tiers, poin] = await Promise.all([tiersService.listTiers(pool), tiersService.lifetimePoints(pool, req.user.id)]);
-    res.json({ data: { ...tiersService.progress(tiers, poin), semua_tier: tiers } });
+    res.json({ data: await tiersService.getMemberTierProgress(pool, req.user.id) });
   })
 );
 
 // ---- Voucher (tambahan.md poin 3) ----
+// Daftar voucher milik member + jumlah per status untuk tab di halaman "Voucher Saya".
+// `status` menerima satu nilai atau daftar dipisah koma (mis. 'used,expired,void' untuk tab Riwayat).
+const memberVoucherQuery = Joi.object({
+  status: Joi.string().pattern(/^[a-z]+(,[a-z]+)*$/, 'status tidak dikenal'),
+}).custom((value, helpers) => {
+  const allowed = ['active', 'reserved', 'used', 'expired', 'void'];
+  if (value.status && value.status.split(',').some((s) => !allowed.includes(s))) {
+    return helpers.message({ custom: 'Status voucher tidak dikenal' });
+  }
+  return value;
+}).unknown(true);
+
 router.get(
   '/member/vouchers',
   asyncHandler(async (req, res) => {
-    res.json(await vouchersService.listVouchers({ memberId: req.user.id, status: req.query.status, pagination: parsePagination(req.query) }));
+    const f = validate(memberVoucherQuery, req.query);
+    res.json(await vouchersService.listVouchers({ memberId: req.user.id, status: f.status, pagination: parsePagination(req.query), ringkasan: true }));
+  })
+);
+
+// Cek satu kode voucher milik sendiri (hanya read; redemption tetap terjadi di checkout More).
+router.get(
+  '/member/vouchers/cek',
+  asyncHandler(async (req, res) => {
+    const { kode } = validate(Joi.object({ kode: Joi.string().trim().min(4).max(24).required().messages({
+      'any.required': 'Masukkan kode voucher', 'string.empty': 'Masukkan kode voucher',
+      'string.min': 'Kode voucher terlalu pendek', 'string.max': 'Kode voucher terlalu panjang',
+    }) }), req.query);
+    res.json({ data: await vouchersService.findByKodeForMember(kode, req.user.id) });
   })
 );
 
@@ -158,14 +182,21 @@ router.get(
   '/member/dashboard',
   asyncHandler(async (req, res) => {
     const recent = { page: 1, limit: 5, offset: 0 };
-    const [points, latestReceipts, latestRedeems, unread] = await Promise.all([
+    const [points, latestReceipts, latestRedeems, unread, voucherAktif] = await Promise.all([
       getBalance(pool, req.user.id),
       receipts.listReceipts({ memberId: req.user.id, pagination: recent }),
       redeems.listRedeems({ memberId: req.user.id, pagination: recent }),
       pool.query("SELECT COUNT(*)::int AS n FROM notifications WHERE member_id = $1 AND kanal = 'in_app' AND dibaca_at IS NULL", [req.user.id]),
+      vouchersService.listVouchers({ memberId: req.user.id, status: 'active', pagination: { page: 1, limit: 3, offset: 0 } }),
     ]);
     res.json({
-      data: { points, struk_terbaru: latestReceipts.data, redeem_terbaru: latestRedeems.data, notifikasi_belum_dibaca: unread.rows[0].n },
+      data: {
+        points,
+        struk_terbaru: latestReceipts.data,
+        redeem_terbaru: latestRedeems.data,
+        notifikasi_belum_dibaca: unread.rows[0].n,
+        voucher_aktif: { total: voucherAktif.meta.total, terbaru: voucherAktif.data },
+      },
     });
   })
 );

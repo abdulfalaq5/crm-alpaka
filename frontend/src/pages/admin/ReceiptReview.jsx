@@ -15,6 +15,7 @@ const CHECK_LABEL = { kelengkapan: 'Kelengkapan data', duplikat: 'Duplikasi', ta
 // Review struk oleh admin (ADM-02, ADM-03, ADM-06): setelah diputuskan halaman menjadi read-only.
 export default function ReceiptReview() {
   const { message } = App.useApp();
+  const { canWrite } = useAdminRole();
   const { id } = useParams();
   const { data, loading, error, reload } = useLoad(`/admin/receipts/${id}`);
   const [rejecting, setRejecting] = useState(false);

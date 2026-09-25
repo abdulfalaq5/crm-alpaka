@@ -8,6 +8,7 @@ const { pool, withTransaction } = require('../db/pool');
 const { authenticate, signToken } = require('../middleware/auth');
 const { audit } = require('../services/audit');
 const mailer = require('../services/mailer');
+const tiers = require('../services/tiers');
 const { validate } = require('../utils/validate');
 const { normalizePhone } = require('../utils/phone');
 const { asyncHandler, AppError, unauthorized, conflict, unprocessable } = require('../utils/http');
@@ -75,6 +76,7 @@ router.post(
            VALUES ($1, $2, $3, $4, now()) RETURNING id, nama, email, no_hp`,
           [v.nama, email, no_hp, hash]
         );
+        await tiers.reevaluate(client, rows[0].id);
         await audit(client, { pelakuTipe: 'member', pelakuId: rows[0].id, aksi: 'member.registrasi', objekTipe: 'member', objekId: rows[0].id });
         return rows[0];
       });

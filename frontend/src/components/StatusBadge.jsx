@@ -8,8 +8,9 @@ const COLORS = {
 };
 
 // Badge teks kecil berwarna sesuai token (bukan ikon besar mencolok).
-export default function StatusBadge({ status, label }) {
-  const s = STATUS[status] || { label: status, color: 'neutral' };
+// `map` untuk domain lain (mis. VOUCHER_STATUS); tanpa itu memakai peta STATUS Receipt/Redeem/Account.
+export default function StatusBadge({ status, label, map = STATUS }) {
+  const s = map[status] || { label: status, color: 'neutral' };
   const color = COLORS[s.color];
   return (
     <span

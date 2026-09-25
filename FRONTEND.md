@@ -73,8 +73,9 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 
 1. Halaman **Dashboard** sebagai landing setelah login: tampilkan saldo poin dalam 3 angka — Total, Ditahan (Hold), Tersedia (DSH-01, PNT-04).
 2. Ringkasan aktivitas terbaru (beberapa struk/redeem terakhir) dengan link ke halaman riwayat lengkap.
-3. (Disarankan) Tab/halaman **Mutasi Poin** menampilkan histori masuk/hold/terpakai/lepas secara kronologis (DSH-06).
+3. (Disarankan) Tab/halaman **Mutasi Poin** menampilkan histori masuk/hold/terpakai/lepas/koreksi/kembalian secara kronologis (DSH-06).
 4. Pastikan seluruh angka dan status konsisten dengan data dari backend (jangan hitung ulang di frontend).
+5. Widget **Voucher Aktif** di dashboard: jumlah voucher aktif + kode terbaru (reward & tanggal berlaku) dengan link ke halaman Voucher. Data dari `voucher_aktif` pada `GET /member/dashboard`; disembunyikan saat tidak ada voucher aktif.
 
 ### A4. Redeem Poin (RDM)
 
@@ -85,7 +86,14 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 5. Halaman **Riwayat Redeem**: list status (Menunggu Persetujuan/Disetujui/Ditolak/Dibatalkan), detail reward diberikan (kode/catatan) jika sudah selesai (RDM-05, DSH-03).
 6. (Disarankan) Tombol **Batalkan** pada pengajuan yang masih "Menunggu Persetujuan" (RDM-08, OI-10).
 
-### A5. Notifikasi (NTF)
+### A5. Halaman Voucher Member (VCH — tambahan.md poin 3)
+
+1. **Read-only**: halaman **Voucher** menampilkan kartu voucher aktif (kode, reward, sisa hari berlaku) dan riwayat (terpakai/kedaluwarsa/dibatalkan) dengan filter status. Member **tidak** punya aksi tukar/pakai — penukaran tetap lewat checkout More by Morello supaya status `reserved`/`used` hanya bisa berubah dari sisi integrasi.
+2. Tombol **salin kode** di tiap voucher aktif, plus countdown "kedaluwarsa dalam N hari" (label "kedaluwarsa besok"/"hari ini" untuk yang mendekati batas).
+3. Form **Cek Kode Voucher**: member mengetik kode untuk memastikan vouchernya masih valid; hasil menampilkan kode, reward, status, dan tanggal berlaku. Kode milik member lain atau tidak ada menghasilkan pesan yang sama (satu pesan "tidak ditemukan atau bukan milik Anda") — jangan bedakan di UI karena itu membocorkan keberadaan kode.
+4. Kartu ringkasan (total/aktif/terpakai/kedaluwarsa) memakai `meta.ringkasan` dari backend, bukan dihitung ulang di frontend.
+
+### A6. Notifikasi (NTF)
 
 1. Ikon lonceng notifikasi di header dengan badge jumlah belum dibaca.
 2. Halaman/dropdown daftar notifikasi: status baru & alasan (jika ditolak) untuk tiap kejadian (struk disetujui/ditolak, redeem diajukan/disetujui/ditolak) (NTF-01, NTF-02, NTF-04).
@@ -122,7 +130,18 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 
 1. Halaman CRUD sederhana untuk daftar reward: nama, poin dibutuhkan, status aktif/nonaktif (RDM-07, OI-09).
 
-### B5. Log Audit (disarankan)
+### B5. Manajemen Voucher (VCH — tambahan.md poin 3 & 6)
+
+1. Kartu statistik di atas tabel: total, aktif, terpakai, kedaluwarsa, dibatalkan, dan yang akan habis ≤ 7 hari.
+2. **Generate Voucher** (butuh role tulis): pilih member (cari nama/email), pilih reward, jumlah (1–25), masa berlaku (opsional — kosongkan untuk memakai default reward), dan catatan. Setelah sukses tampilkan daftar kode yang bisa disalin.
+3. Filter & pencarian tabel: status, sumber (manual/redeem), rentang tanggal terbit, dan pencarian kode/nama member/nama reward. Filter yang sama dipakai saat export CSV.
+4. Aksi per baris: **Perpanjang** (jumlah hari + alasan wajib) dan **Void** (alasan wajib, dengan konfirmasi yang menjelaskan akibatnya). Keduanya hanya tampil bila voucher masih `active`, dan status lain `reserved`/`used`/`expired`/`void` menjelaskan kenapa aksi tidak tersedia.
+5. **Jalankan pembersihan** (expiry + pelepasan reservasi) tanpa perlu menunggu interval scheduler, untuk kasus yang perlu diperbaiki saat itu juga.
+6. Drawer **detail voucher**: kode, member, reward, poin, sumber, masa berlaku, jejak redeem, siapa yang menerbitkan, catatan, dan alasan void bila ada.
+7. Tombol **Export CSV** mengikuti filter yang sedang aktif.
+8. Aksi tulis disembunyikan untuk `viewer` (tetap ditegakkan server lewat `middleware/adminRole.js`).
+
+### B6. Log Audit (disarankan)
 
 1. Halaman list log: pelaku, aksi, objek, waktu — read-only, tanpa opsi edit/hapus dari UI (ADM-05, BR-12, NFR-06).
 
@@ -145,9 +164,10 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 4. Admin: Antrean & Review Struk + Pengaturan Auto-Approve (B1, B2) — agar alur struk bisa diuji end-to-end lebih awal
 5. Member: Dashboard saldo poin (A3)
 6. Member: Redeem (A4) + Admin: Antrean & Review Redeem (B3)
-7. Notifikasi in-app (A5)
-8. Manajemen Reward & Log Audit (B4, B5) — opsional/disarankan
-9. Review responsif menyeluruh (mobile & desktop) dan uji sesuai **Bagian 9 (Kriteria Penerimaan/UAT)** dokumen requirement.
+7. Voucher: Manajemen Voucher admin (B5) + halaman Voucher member (A5)
+8. Notifikasi in-app (A6)
+9. Manajemen Reward & Log Audit (B4, B6) — opsional/disarankan
+10. Review responsif menyeluruh (mobile & desktop) dan uji sesuai **Bagian 9 (Kriteria Penerimaan/UAT)** dokumen requirement.
 
 ## Hal yang Perlu Dikonfirmasi Sebelum Desain Final
 

@@ -8,6 +8,9 @@ export const num = (n) => Number(n || 0).toLocaleString('id-ID');
 export const fmtDate = (d) => (d ? dayjs(d).format('DD MMM YYYY') : '-');
 export const fmtDateTime = (d) => (d ? dayjs(d).format('DD MMM YYYY HH:mm') : '-');
 
+/** Sisa masa berlaku dalam hari (dibulatkan ke atas); null bila tidak ada tanggalnya. */
+export const sisaHari = (d) => (d ? Math.max(Math.ceil(dayjs(d).startOf('day').diff(dayjs().startOf('day'), 'day')), 0) : null);
+
 export const STATUS = {
   menunggu_review: { label: 'Menunggu Review', color: 'warning' },
   disetujui: { label: 'Disetujui', color: 'success' },
@@ -23,6 +26,7 @@ export const MUTATION = {
   terpakai: { label: 'Terpakai', sign: '−', color: 'danger' },
   lepas: { label: 'Hold Dilepas', sign: '+', color: 'success' },
   koreksi: { label: 'Koreksi Poin', sign: '−', color: 'danger' },
+  kembalian: { label: 'Kembalian Poin', sign: '+', color: 'success' },
 };
 
 export const VOUCHER_STATUS = {
@@ -31,4 +35,9 @@ export const VOUCHER_STATUS = {
   used: { label: 'Terpakai', color: 'neutral' },
   expired: { label: 'Kedaluwarsa', color: 'danger' },
   void: { label: 'Dibatalkan', color: 'danger' },
+};
+
+export const VOUCHER_SUMBER = {
+  redeem: 'Redeem',
+  manual: 'Manual',
 };

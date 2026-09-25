@@ -11,8 +11,8 @@ function hitungPoin(nominal, rule) {
 }
 
 /** Hitung saldo dari ledger (PNT-03). Fungsi murni atas jumlah per jenis. */
-function hitungSaldo({ masuk = 0, hold = 0, terpakai = 0, lepas = 0, koreksi = 0 }) {
-  const total = masuk - terpakai - koreksi; // koreksi = pembalikan poin masuk dari struk yang dikoreksi
+function hitungSaldo({ masuk = 0, hold = 0, terpakai = 0, lepas = 0, koreksi = 0, kembalian = 0 }) {
+  const total = masuk + kembalian - terpakai - koreksi; // koreksi = pembalikan poin masuk dari struk yang dikoreksi; kembalian = refund voucher manual
   const ditahan = hold - lepas - terpakai;
   return { total, ditahan, tersedia: total - ditahan };
 }
@@ -30,6 +30,7 @@ async function getBalance(db, memberId) {
 
 /** Kunci baris member agar perubahan saldo oleh request bersamaan berjalan berurutan (NFR-05, BR-09). */
 async function lockMember(client, memberId) {
+  await tiers.lockTierEvaluation(client);
   await client.query('SELECT id FROM members WHERE id = $1 FOR UPDATE', [memberId]);
 }
 

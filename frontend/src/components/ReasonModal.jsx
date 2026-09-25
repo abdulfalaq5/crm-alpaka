@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Form, Input, Modal } from 'antd';
+import { Alert, Form, Input, Modal } from 'antd';
 
 /**
  * Modal isian alasan/catatan. Bila `required`, alasan wajib diisi sebelum submit (BR-08).
  * onSubmit(value) harus mengembalikan promise; modal menutup bila sukses.
  */
-export default function ReasonModal({ open, title, label, required = true, okText, danger, onSubmit, onCancel, placeholder }) {
+export default function ReasonModal({ open, title, label, required = true, okText, danger, description, onSubmit, onCancel, placeholder }) {
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
 
@@ -41,6 +41,7 @@ export default function ReasonModal({ open, title, label, required = true, okTex
       }}
       destroyOnHidden
     >
+      {description && <Alert type="warning" showIcon message={description} style={{ marginBottom: 12 }} />}
       <Form form={form} layout="vertical" preserve={false}>
         <Form.Item
           name="text"
