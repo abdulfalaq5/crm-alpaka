@@ -18,8 +18,8 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('alpaka:session-expired', onExpired);
   }, []);
 
-  const signIn = useCallback((token, nextUser) => {
-    session.set({ token, user: nextUser });
+  const signIn = useCallback((token, nextUser, remember = true) => {
+    session.set({ token, user: nextUser }, remember);
     setUser(nextUser);
     setExpired(false);
   }, []);
@@ -32,19 +32,19 @@ export function AuthProvider({ children }) {
 
   const replaceToken = useCallback((token) => {
     const s = session.get();
-    if (s) session.set({ ...s, token });
+    if (s) session.set({ ...s, token }, session.remember);
   }, []);
 
   const updateUser = useCallback((nextUser) => {
     const s = session.get();
-    if (s) session.set({ ...s, user: nextUser });
+    if (s) session.set({ ...s, user: nextUser }, session.remember);
     setUser(nextUser);
   }, []);
 
   const login = useCallback(
-    async (path, payload) => {
+    async (path, payload, { remember = true } = {}) => {
       const { data } = await api.post(path, payload);
-      signIn(data.token, data.user);
+      signIn(data.token, data.user, remember);
       return data.user;
     },
     [signIn]

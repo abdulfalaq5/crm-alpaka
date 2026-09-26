@@ -32,7 +32,7 @@ Kode kebutuhan (REG-xx, UPL-xx, dst.), aturan bisnis (BR-xx), dan item terbuka (
 2. Validasi format email/no. HP dan cek keunikan identifier lintas channel sebelum simpan (REG-02, REG-03).
 3. Hash password sebelum disimpan (REG-05); jangan pernah simpan plaintext.
 4. Buat endpoint `POST /auth/login` — verifikasi kredensial, terapkan pembatasan jumlah percobaan gagal (REG-04, REG-05).
-5. Buat sesi/token dengan waktu kedaluwarsa otomatis saat tidak aktif (REG-05).
+5. Buat sesi/token dengan waktu kedaluwarsa otomatis saat tidak aktif (REG-05). Token berlaku `SESSION_IDLE_MINUTES` (default 30 menit) dan bergeser (*sliding*): setiap permintaan terautentikasi mengembalikan token baru lewat header `X-Refresh-Token` (header ini wajib di-expose lewat `Access-Control-Expose-Headers`). Permintaan latar belakang `X-Background: 1` (polling notifikasi) tidak memperpanjang sesi; `X-Keepalive: 1` (tombol "Tetap masuk"/aktivitas klien) selalu memperpanjang.
 6. Buat endpoint terpisah `POST /auth/admin/login` dengan role `admin`, terpisah dari akun member (REG-06).
 7. (Disarankan) Buat endpoint pemulihan akses (`POST /auth/forgot-password`, `POST /auth/reset-password`) dan endpoint update profil dasar (REG-07).
 8. Tambahkan field persetujuan syarat program saat registrasi, simpan timestamp persetujuan (REG-08, OI-15).

@@ -17,7 +17,8 @@ const TABLES = {
 /**
  * Otentikasi + otorisasi berbasis role di server (NFR-03).
  * Sesi berakhir otomatis bila tidak aktif: token berlaku SESSION_IDLE_MINUTES dan
- * diperpanjang lewat header X-Refresh-Token selama pengguna masih aktif.
+ * diperpanjang (sliding) lewat header X-Refresh-Token pada setiap permintaan
+ * terautentikasi yang bukan latar belakang.
  */
 function authenticate(...roles) {
   return asyncHandler(async (req, res, next) => {
@@ -43,11 +44,13 @@ function authenticate(...roles) {
 
     req.user = { id: account.id, nama: account.nama, role: payload.role, adminRole: account.role || null };
 
-    const remaining = payload.exp - Math.floor(Date.now() / 1000);
-    // Permintaan latar belakang (mis. polling lonceng, header X-Background: 1) tidak memperpanjang sesi idle.
-    // X-Keepalive: 1 (tombol "Tetap masuk") selalu memperpanjang sesi.
+    // Sesi idle sliding: setiap permintaan terautentikasi memperpanjang token ke jendela penuh,
+    // sehingga pengguna yang aktif tidak pernah melihat peringatan "sesi akan berakhir".
+    // Permintaan latar belakang (polling lonceng, header X-Background: 1) TIDAK memperpanjang,
+    // dan X-Keepalive: 1 (tombol "Tetap masuk"/aktivitas dari klien) selalu memperpanjang.
+    const background = req.headers['x-background'] === '1';
     const keepalive = req.headers['x-keepalive'] === '1';
-    if ((keepalive || remaining < idleSeconds() / 2) && req.headers['x-background'] !== '1') {
+    if (keepalive || !background) {
       res.setHeader('X-Refresh-Token', signToken(account.id, payload.role));
     }
     next();

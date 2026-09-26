@@ -58,7 +58,8 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 2. Tampilkan pesan error inline saat identifier sudah terdaftar → arahkan ke halaman login (sesuai diagram 3.1 dokumen).
 3. Halaman **Login**: form identifier + password, link "lupa password" (REG-07), pesan error saat kredensial salah, indikator pembatasan percobaan.
 4. Setelah login sukses → redirect ke Dashboard Member.
-5. Simpan token/sesi di storage yang aman sisi client, hapus otomatis saat sesi berakhir (selaras dengan REG-05 di backend).
+5. Simpan token/sesi di storage yang aman sisi client, hapus otomatis saat sesi berakhir (selaras dengan REG-05 di backend). Checkbox "ingat saya" memilih `localStorage` (default) atau `sessionStorage`; pergantian hanya saat login, token yang disegarkan tidak memindahkan store.
+6. Peringatan "Sesi akan berakhir" (`SessionGuard`): jendela peringatan = 20% masa token, dibatasi 15–120 detik, sehingga `SESSION_IDLE_MINUTES` yang kecil tidak membuat dialog muncul terus-menerus. Aktivitas klik/ketik yang tidak memicu permintaan API akan memperpanjang sesi diam-diam (maks. sekali per 5 menit, header `X-Keepalive`); polling notifikasi memakai `X-Background` sehingga tidak prolong sesi.
 
 ### A2. Upload Struk/Invoice (UPL)
 

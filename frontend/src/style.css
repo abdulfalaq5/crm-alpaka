@@ -40,7 +40,7 @@ h1, h2, h3, .section-label { letter-spacing: -0.01em; }
 .page-title { font-size: 28px; font-weight: 700; margin: 0 0 4px; }
 .page-sub { color: var(--color-text-secondary); margin: 0 0 24px; }
 
-.brand { font-weight: 700; letter-spacing: 0.28em; font-size: 18px; color: var(--color-text-primary); text-decoration: none; }
+.brand { font-weight: 700; letter-spacing: 0.28em; font-size: 18px; color: var(--color-text-primary); text-decoration: none; text-transform: uppercase; }
 
 .container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
 .container.wide { max-width: 1320px; }
@@ -124,9 +124,9 @@ button.linklike { background: none; border: 0; padding: 0; font: inherit; color:
    ========================================================================== */
 .dash { max-width: 1320px; margin: 0 auto; padding-bottom: 56px; }
 .dash > * + * { margin-top: 44px; }
-.dash .soft-in { animation: soft-in 0.28s ease-out both; }
+.soft-in { animation: soft-in 0.28s ease-out both; }
 @keyframes soft-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .dash .soft-in { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .soft-in { animation: none; } }
 
 /* Label micro (kicker/eyebrow) */
 .dash .kicker { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.17em; color: var(--color-text-secondary); }
@@ -221,3 +221,56 @@ button.linklike { background: none; border: 0; padding: 0; font: inherit; color:
 .activity-row .delta { flex: none; font-size: 13px; font-weight: 600; }
 .activity-row .delta.in { color: var(--color-success); }
 .activity-row .delta.flat { color: var(--color-text-secondary); font-weight: 500; }
+
+/* ============================================================================
+   Halaman login (member & admin) — mengikuti referensi desain "More Rewards Hub".
+   Panel editorial gelap di kiri (>=1024px), form kanvas 400px di kanan.
+   ========================================================================== */
+.auth-page { display: flex; min-height: 100vh; background: var(--color-bg); }
+.auth-editorial { position: relative; display: none; width: 46%; overflow: hidden; }
+@media (min-width: 1024px) { .auth-editorial { display: block; } }
+.auth-editorial > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.auth-editorial .veil { position: absolute; inset: 0; background: linear-gradient(to top, rgba(23, 23, 23, 0.88), rgba(23, 23, 23, 0.5) 55%, rgba(23, 23, 23, 0.25)); }
+.auth-editorial .inner { position: relative; display: flex; flex-direction: column; justify-content: space-between; height: 100%; min-height: 100vh; padding: 48px; color: #fff; }
+.auth-editorial .brand { color: #fff; }
+.auth-editorial .kicker { color: rgba(255, 255, 255, 0.7); }
+.auth-editorial h2 { max-width: 380px; margin: 20px 0 0; font-size: 34px; font-weight: 600; line-height: 1.15; }
+.auth-editorial .lead { max-width: 340px; margin: 16px 0 0; font-size: 13px; line-height: 1.7; color: rgba(255, 255, 255, 0.72); }
+.auth-editorial .foot { margin: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+
+.auth-main { display: flex; flex: 1; flex-direction: column; padding: 32px 20px; }
+@media (min-width: 768px) { .auth-main { padding: 32px 48px; } }
+.auth-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.auth-topbar .only-lg-off { display: block; }
+@media (min-width: 1024px) { .auth-topbar .only-lg-off { display: none; } }
+.auth-topnote { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-text-secondary); }
+.auth-panel { width: 100%; max-width: 400px; margin: auto; padding: 48px 0 40px; }
+.auth-panel h1 { margin: 12px 0 0; font-size: 30px; font-weight: 600; line-height: 1.2; }
+@media (min-width: 768px) { .auth-panel h1 { font-size: 34px; } }
+.auth-panel h1 .dot { color: var(--color-text-secondary); }
+.auth-panel .sub { margin: 8px 0 0; font-size: 13px; color: var(--color-text-secondary); }
+.auth-alert { margin-top: 24px; }
+.auth-ok { display: flex; align-items: center; gap: 12px; margin-top: 40px; border: 1px solid var(--color-border); background: var(--color-surface); padding: 16px 20px; font-size: 14px; }
+.auth-ok .anticon { color: var(--color-success); }
+
+.auth-form { margin-top: 36px; }
+.auth-form .ant-form-item { margin-bottom: 20px; }
+.auth-form .ant-form-item-label { padding-bottom: 8px; }
+.auth-form .ant-form-item-label > label { height: auto; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-text-secondary); }
+.auth-form .ant-input-affix-wrapper { height: 44px; padding-inline: 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0; box-shadow: none; }
+.auth-form .ant-input-affix-wrapper:hover { border-color: var(--color-text-secondary); }
+.auth-form .ant-input-affix-wrapper-focused { border-color: var(--color-text-primary); }
+.auth-form .ant-input-affix-wrapper .ant-input { font-size: 14px; }
+.auth-form .ant-input-affix-wrapper .ant-input::placeholder { color: rgba(107, 107, 104, 0.7); }
+.auth-form .field-ico { font-size: 15px; color: var(--color-text-secondary); }
+.auth-form .field-eye { cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
+.auth-form .field-eye:hover { color: var(--color-text-primary); }
+.auth-form .ant-form-item-explain { padding-top: 6px; font-size: 12px; }
+.auth-form .ant-form-item.has-extra { position: relative; }
+.auth-forgot { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-decoration: none; }
+.auth-forgot:hover { color: var(--color-text-primary); text-decoration: underline; }
+.auth-remember { margin: 4px 0 24px !important; }
+.auth-remember .ant-checkbox-wrapper { font-size: 12px; color: var(--color-text-secondary); }
+.auth-submit { display: flex; align-items: center; justify-content: center; gap: 12px; height: 48px !important; border-radius: 0; font-size: 14px; }
+.auth-alt { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--color-text-secondary); }
+.auth-legal { width: 100%; max-width: 400px; margin: 0 auto; text-align: center; font-size: 11px; line-height: 1.6; color: var(--color-text-secondary); }
