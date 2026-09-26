@@ -59,7 +59,8 @@ export default function MemberLayout() {
         </Dropdown>
       </Layout.Header>
       <Layout.Content>
-        <div className="container">
+        {/* Dashboard memakai kanvas lebar sesuai desain editorial; halaman lain tetap container standar. */}
+        <div className={pathname === '/' ? 'container wide' : 'container'}>
           <Outlet />
         </div>
       </Layout.Content>

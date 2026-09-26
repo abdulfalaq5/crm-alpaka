@@ -3,6 +3,7 @@ const { audit } = require('./audit');
 const { notify } = require('./notifications');
 const { getBalance, lockMember, addEntry } = require('./points');
 const vouchers = require('./vouchers');
+const rewards = require('./rewards');
 const { notFound, conflict, unprocessable } = require('../utils/http');
 
 const COLS = `
@@ -16,24 +17,11 @@ async function createRedeem({ memberId, rewardId }) {
     // Kunci baris member: dua redeem bersamaan diproses berurutan sehingga tidak menembus saldo (RDM-06).
     await lockMember(client, memberId);
 
-    const { rows: rw } = await client.query('SELECT * FROM rewards WHERE id = $1 AND aktif = TRUE', [rewardId]);
-    if (!rw.length) throw notFound('Reward tidak ditemukan atau tidak aktif');
-    const reward = rw[0];
-    if (reward.stok !== null && reward.stok <= 0) throw unprocessable('Stok reward ini sudah habis.', { reward_id: 'Stok habis' });
-    if (reward.valid_from && new Date(reward.valid_from) > new Date()) throw unprocessable('Reward ini belum tersedia.', { reward_id: 'Belum tersedia' });
-    if (reward.valid_until && new Date(reward.valid_until) < new Date()) throw unprocessable('Reward ini sudah tidak berlaku.', { reward_id: 'Sudah tidak berlaku' });
-    if (reward.tier_minimum_id) {
-      const { rows: chk } = await client.query(
-        `SELECT COALESCE(mt.urutan, -1) >= rt.urutan AS memenuhi
-           FROM tiers rt LEFT JOIN members m ON m.id = $2 LEFT JOIN tiers mt ON mt.id = m.current_tier_id
-          WHERE rt.id = $1`,
-        [reward.tier_minimum_id, memberId]
-      );
-      if (!chk[0]?.memenuhi) {
-        const { rows: rt } = await client.query('SELECT nama FROM tiers WHERE id = $1', [reward.tier_minimum_id]);
-        throw unprocessable(`Reward ini khusus member tier ${rt[0].nama} ke atas.`, { reward_id: 'Tier belum memenuhi syarat' });
-      }
-    }
+    const reward = await rewards.ambil(client, rewardId, memberId);
+    // Stok, tier minimum, dan masa tampil dicek oleh satu fungsi yang sama dengan katalog member,
+    // sehingga apa yang tampil di katalog pasti bisa diredeem (dan sebaliknya).
+    const lock = rewards.alasanTerkunci(reward, reward.urutan_member);
+    if (lock) throw unprocessable(lock.pesan, { reward_id: lock.field });
 
     const saldo = await getBalance(client, memberId);
     if (saldo.tersedia < reward.poin_dibutuhkan) {

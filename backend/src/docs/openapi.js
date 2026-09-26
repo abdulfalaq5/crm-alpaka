@@ -161,7 +161,20 @@ const paths = {
   '/member/points/mutations': { get: op({ tag: 'Member — Poin', summary: 'Mutasi poin: masuk / hold / terpakai / lepas / koreksi (DSH-06)', auth: 'member', params: pagingParams, schema: page(ref('Mutation')) }) },
 
   // ------------------------------------------------------ Member: reward/redeem
-  '/rewards': { get: op({ tag: 'Member — Redeem', summary: 'Katalog reward aktif (RDM-07)', auth: 'member', schema: data(arr(ref('Reward'))) }) },
+  '/rewards': {
+    get: op({
+      tag: 'Member — Redeem', summary: 'Katalog reward aktif (RDM-07)', auth: 'member',
+      description: 'Hanya reward aktif yang masih bisa ditukar: stok belum habis dan berada dalam masa tampil (`valid_from`/`valid_until`). Reward eksklusif tier tetap tampil dengan `memenuhi_tier: false` agar member tahu alasannya.',
+      schema: data(arr(ref('Reward'))),
+    }),
+  },
+  '/rewards/{id}': {
+    get: op({
+      tag: 'Member — Redeem', summary: 'Detail reward (syarat, masa berlaku, masa berlaku voucher setelah redeem)',
+      description: 'Reward nonaktif → 404. Reward stok habis/kedaluwarsa tetap dikembalikan dengan `bisa_ditukar: false` beserta `alasan_terkunci` agar tautan lama tidak membingungkan.',
+      auth: 'member', params: [idParam()], schema: data(ref('Reward')), errors: [404],
+    }),
+  },
   '/redeem': {
     post: op({
       tag: 'Member — Redeem', summary: 'Ajukan redeem (RDM-01..03, BR-09)',
@@ -372,9 +385,32 @@ const schemas = {
     })],
   },
   Redeem: obj({ id: str(), member_id: str(), reward_id: str(), reward_nama: str(), jumlah_poin: int(), status: statusRedeem, alasan_penolakan: str({ nullable: true }), detail_pemberian: str({ nullable: true }), waktu_keputusan: str({ format: 'date-time', nullable: true }), created_at: str({ format: 'date-time' }), member_nama: str(), member_email: str({ nullable: true }) }),
-  Reward: obj({ id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(), gambar_url: str({ nullable: true }) }),
-  RewardAdmin: obj({ id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(), aktif: bool(), gambar_url: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
-  RewardInput: obj({ nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int({ minimum: 1 }), aktif: bool({ default: true }) }, ['nama', 'poin_dibutuhkan']),
+  Reward: obj({
+    id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(),
+    berlaku_hari: int({ description: 'Masa berlaku voucher (hari) setelah redeem disetujui' }),
+    stok: int({ nullable: true, description: 'null = tanpa batas' }), status_stok: str({ enum: ['tersedia', 'habis', 'tanpa_batas'] }),
+    aktif: bool(), gambar_url: str({ nullable: true }),
+    tier_minimum_id: str({ nullable: true }), tier_minimum_nama: str({ nullable: true }), memenuhi_tier: bool(),
+    valid_from: str({ format: 'date', nullable: true }), valid_until: str({ format: 'date', nullable: true }),
+    bisa_ditukar: bool(), alasan_kode: str({ enum: ['stok_habis', 'belum_tersedia', 'tidak_berlaku', 'tier'], nullable: true }), alasan_terkunci: str({ nullable: true }),
+  }),
+  RewardAdmin: obj({
+    id: str(), nama: str(), deskripsi: str({ nullable: true }), poin_dibutuhkan: int(), aktif: bool(), gambar_url: str({ nullable: true }),
+    stok: int({ nullable: true, description: 'null = tanpa batas' }), status_stok: str({ enum: ['tersedia', 'habis', 'tanpa_batas'] }),
+    tier_minimum_id: str({ nullable: true }), tier_minimum_nama: str({ nullable: true }),
+    valid_from: str({ format: 'date', nullable: true }), valid_until: str({ format: 'date', nullable: true }), berlaku_hari: int(),
+    created_at: str({ format: 'date-time' }),
+  }),
+  RewardInput: obj(
+    {
+      nama: str({ minLength: 2, maxLength: 120 }), deskripsi: str({ nullable: true, maxLength: 500 }),
+      poin_dibutuhkan: int({ minimum: 1 }), aktif: bool({ default: true }),
+      stok: int({ nullable: true, minimum: 0, description: 'Kosong/null = tanpa batas' }),
+      tier_minimum_id: str({ nullable: true }), valid_from: str({ format: 'date', nullable: true }), valid_until: str({ format: 'date', nullable: true }),
+      berlaku_hari: int({ minimum: 1, maximum: 3650, default: 30 }),
+    },
+    ['nama', 'poin_dibutuhkan']
+  ),
   Mutation: obj({ id: str(), jenis: str({ enum: ['masuk', 'hold', 'terpakai', 'lepas', 'koreksi', 'kembalian'] }), jumlah: int(), referensi_tipe: str({ enum: ['receipt', 'redeem', 'koreksi'] }), referensi_id: str(), keterangan: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
   Notification: obj({ id: str(), jenis_kejadian: str({ enum: ['struk_disetujui', 'struk_ditolak', 'redeem_diajukan', 'redeem_disetujui', 'redeem_ditolak'] }), isi: str(), kanal: str({ example: 'in_app' }), referensi_tipe: str({ nullable: true }), referensi_id: str({ nullable: true }), dibaca_at: str({ format: 'date-time', nullable: true }), created_at: str({ format: 'date-time' }) }),
   AutoApproveCriteria: obj({ id: str(), kode: str({ enum: ['channel', 'batas_nominal'] }), kriteria: str(), nilai: { type: 'object' }, aktif: bool(), updated_at: str({ format: 'date-time' }) }),

@@ -41,3 +41,17 @@ export const VOUCHER_SUMBER = {
   redeem: 'Redeem',
   manual: 'Manual',
 };
+
+export const STATUS_STOK = {
+  tersedia: { label: 'Tersedia', color: 'success' },
+  habis: { label: 'Stok Habis', color: 'danger' },
+  tanpa_batas: { label: 'Tanpa Batas', color: 'neutral' },
+};
+
+/** Label pendek untuk tombol yang terkunci; pesan lengkap datang dari `alasan_terkunci`. */
+export const ALASAN_TERKUNCI = {
+  stok_habis: 'Stok habis',
+  belum_tersedia: 'Belum tersedia',
+  tidak_berlaku: 'Sudah berakhir',
+  tier: 'Tier belum memenuhi',
+};

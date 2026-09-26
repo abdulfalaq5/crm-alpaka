@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, Button, Popconfirm, Table, Tabs, Tooltip, App } from 'antd';
+import { Alert, Button, Popconfirm, Skeleton, Table, Tabs, Tooltip, App } from 'antd';
 import api, { errMsg } from '../../api';
 import { useLoad } from '../../hooks';
-import { fmtDateTime, num, VOUCHER_STATUS } from '../../format';
+import { fmtDate, fmtDateTime, num, ALASAN_TERKUNCI } from '../../format';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
+import RewardDetail from '../../components/RewardDetail';
 
 // Katalog reward + riwayat redeem (RDM-01..08).
 export default function Redeem() {
@@ -14,33 +15,41 @@ export default function Redeem() {
   const [page, setPage] = useState(1);
   const history = useLoad('/member/redeems', { page, limit: 10 }, [page]);
   const [busy, setBusy] = useState(false);
+  const [detailId, setDetailId] = useState(null);
   const tersedia = points.data?.data.tersedia ?? 0;
 
-  const refresh = () => { points.reload(); history.reload(); };
+  // Katalog ikut dimuat ulang: stok reward berkurang setiap kali ada redeem.
+  const refresh = () => { points.reload(); rewards.reload(); history.reload(); };
 
-  const redeem = (reward) => {
-    modal.confirm({
-      title: `Tukar "${reward.nama}"?`,
-      content: (
-        <p>
-          <b>{num(reward.poin_dibutuhkan)} poin</b> akan ditahan (hold) sampai pengajuan diproses admin. Bila ditolak atau
-          dibatalkan, poin kembali ke saldo tersedia.
-        </p>
-      ),
-      okText: 'Ajukan Redeem',
-      cancelText: 'Batal',
-      onOk: async () => {
-        try {
-          await api.post('/redeem', { reward_id: reward.id });
-          message.success('Pengajuan redeem dikirim. Status: Menunggu Persetujuan.');
-          refresh();
-        } catch (err) {
-          message.error(errMsg(err));
-          refresh();
-        }
-      },
+  /** Kembalikan promise agar pemanggil (mis. drawer detail) tahu pengajuannya terkirim. */
+  const redeem = (reward) =>
+    new Promise((resolve, reject) => {
+      modal.confirm({
+        title: `Tukar "${reward.nama}"?`,
+        content: (
+          <p>
+            <b>{num(reward.poin_dibutuhkan)} poin</b> akan ditahan (hold) sampai pengajuan diproses admin. Bila ditolak atau
+            dibatalkan, poin kembali ke saldo tersedia.
+          </p>
+        ),
+        okText: 'Ajukan Redeem',
+        cancelText: 'Batal',
+        onOk: async () => {
+          try {
+            await api.post('/redeem', { reward_id: reward.id });
+            message.success('Pengajuan redeem dikirim. Status: Menunggu Persetujuan.');
+            refresh();
+            resolve();
+          } catch (err) {
+            message.error(errMsg(err));
+            refresh();
+            reject(err);
+          }
+        },
+        onCancel: () => reject(new Error('dibatalkan')),
+      });
     });
-  };
+
 
   const cancel = async (id) => {
     setBusy(true);
@@ -67,28 +76,35 @@ export default function Redeem() {
             children: (
               <>
                 {rewards.error && <Alert type="error" showIcon message={rewards.error} />}
-                {rewards.data?.data.length === 0 && <EmptyState text="Belum ada reward yang tersedia" />}
+                {rewards.loading && <Skeleton active paragraph={{ rows: 6 }} />}
+                {rewards.data?.data.length === 0 && !rewards.loading && (
+                  <EmptyState text="Belum ada reward yang tersedia" />
+                )}
                 <div className="reward-grid">
                   {(rewards.data?.data || []).map((r) => {
                     const kurang = r.poin_dibutuhkan - tersedia;
                     const terkunci = kurang > 0 || r.memenuhi_tier === false;
+                    const label = kurang > 0 ? 'Poin belum cukup' : r.bisa_ditukar ? 'Tukar' : ALASAN_TERKUNCI[r.alasan_kode] || 'Tidak tersedia';
                     return (
                       <div className="reward-card" key={r.id}>
-                        <div className="reward-visual">
+                        <button type="button" className="reward-visual" onClick={() => setDetailId(r.id)} aria-label={`Detail ${r.nama}`}>
                           {r.gambar_url ? <img src={r.gambar_url} alt={r.nama} loading="lazy" /> : r.nama.slice(0, 1).toUpperCase()}
-                        </div>
+                        </button>
                         <div className="reward-body">
-                          <h3>{r.nama}</h3>
+                          <h3>
+                            <button type="button" className="linklike" onClick={() => setDetailId(r.id)}>{r.nama}</button>
+                          </h3>
                           {r.deskripsi && <div style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{r.deskripsi}</div>}
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                             {r.tier_minimum_nama && <span>Khusus tier {r.tier_minimum_nama}+</span>}
-                            {r.stok !== null && <span>· Sisa stok {num(r.stok)}</span>}
+                            {r.status_stok === 'tersedia' && <span>· Sisa stok {num(r.stok)}{r.stok <= 3 ? ' (menipis)' : ''}</span>}
+                            {r.valid_until && <span>· Berlaku s/d {fmtDate(r.valid_until)}</span>}
                           </div>
                           <div style={{ fontWeight: 600, marginTop: 'auto' }}>{num(r.poin_dibutuhkan)} poin</div>
-                          <Tooltip title={r.memenuhi_tier === false ? `Khusus member tier ${r.tier_minimum_nama} ke atas` : kurang > 0 ? `Poin Anda kurang ${num(kurang)} lagi` : ''}>
+                          <Tooltip title={kurang > 0 ? `Poin Anda kurang ${num(kurang)} lagi` : r.alasan_terkunci || ''}>
                             <span>
                               <Button type="primary" block disabled={terkunci} onClick={() => redeem(r)}>
-                                {r.memenuhi_tier === false ? 'Tier belum memenuhi' : kurang > 0 ? 'Poin belum cukup' : 'Tukar'}
+                                {label}
                               </Button>
                             </span>
                           </Tooltip>
@@ -139,6 +155,9 @@ export default function Redeem() {
           },
         ]}
       />
+      {detailId && (
+        <RewardDetail rewardId={detailId} tersedia={tersedia} onClose={() => setDetailId(null)} onRedeem={redeem} />
+      )}
     </>
   );
 }

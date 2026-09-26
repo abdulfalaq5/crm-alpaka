@@ -76,15 +76,18 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 3. (Disarankan) Tab/halaman **Mutasi Poin** menampilkan histori masuk/hold/terpakai/lepas/koreksi/kembalian secara kronologis (DSH-06).
 4. Pastikan seluruh angka dan status konsisten dengan data dari backend (jangan hitung ulang di frontend).
 5. Widget **Voucher Aktif** di dashboard: jumlah voucher aktif + kode terbaru (reward & tanggal berlaku) dengan link ke halaman Voucher. Data dari `voucher_aktif` pada `GET /member/dashboard`; disembunyikan saat tidak ada voucher aktif.
+6. Tampilan dashboard mengikuti referensi desain editorial "More Rewards Hub" (`morello-member-hub`): sapaan + pil tier, hero banner + kartu poin gelap, panel tier & dompet voucher, "Kurasi untukmu" (3 reward pertama dari `GET /rewards`), dan "Aktivitas terbaru". Satu aksi = satu baris: mutasi `terpakai` digabung dengan `hold` redeem yang sama agar poin keluar tidak terhitung dua kali secara visual.
+7. Font halaman memakai Figtree (`@fontsource/figtree`) agar sesuai tipografi desain; kanvas dashboard lebih lebar (`max-width: 1320px`) dan halaman member lain tetap memakai container standar.
 
 ### A4. Redeem Poin (RDM)
 
-1. Halaman **Redeem**: tampilkan daftar reward aktif (nama, poin dibutuhkan) dalam bentuk card/list, mengikuti gaya galeri produk referensi (gambar besar, judul jelas, info poin di bawahnya).
+1. Halaman **Redeem**: tampilkan daftar reward aktif (nama, poin dibutuhkan) dalam bentuk card/list, mengikuti gaya galeri produk referensi (gambar besar, judul jelas, info poin di bawahnya). Tanda pendukung: syarat tier, sisa stok (dengan penanda "menipis" bila ≤ 3), dan masa tampil `Berlaku s/d ...`.
 2. Saat memilih reward, tampilkan konfirmasi jumlah poin yang akan di-hold sebelum submit final.
 3. Nonaktifkan/disable tombol redeem untuk reward yang poin dibutuhkannya melebihi saldo tersedia member, dengan keterangan jelas.
 4. Setelah pengajuan berhasil, tampilkan status **"Menunggu Persetujuan"** dan info bahwa poin sudah di-hold.
 5. Halaman **Riwayat Redeem**: list status (Menunggu Persetujuan/Disetujui/Ditolak/Dibatalkan), detail reward diberikan (kode/catatan) jika sudah selesai (RDM-05, DSH-03).
 6. (Disarankan) Tombol **Batalkan** pada pengajuan yang masih "Menunggu Persetujuan" (RDM-08, OI-10).
+7. Klik nama/gambar reward membuka **drawer detail** (`GET /rewards/:id`): deskripsi lengkap, syarat tier, ketersediaan, masa tampil, masa berlaku voucher setelah redeem, dan alasan terkunci bila tidak bisa ditukar. Katalog dimuat ulang otomatis setiap kali redeem/batal agar angka stok selalu mutakhir.
 
 ### A5. Halaman Voucher Member (VCH — tambahan.md poin 3)
 
@@ -173,4 +176,4 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 
 - Logo, warna, dan font resmi Alpaka (brand guideline) — palet di Bagian 0 masih usulan berbasis pengamatan visual, bukan hex/font resmi dari Client.
 - OI-08 (kanal notifikasi) — mempengaruhi apakah perlu halaman pengaturan preferensi notifikasi di sisi member.
-- OI-09 (bentuk reward) — mempengaruhi tampilan katalog reward (apakah perlu gambar per reward atau cukup teks).
+- ~~OI-09 (bentuk reward)~~ — sudah diputuskan: reward memakai **gambar per reward** (JPG/PNG/WebP, maks 2 MB, diunggah admin) dengan inisial sebagai cadangan bila gambar kosong.

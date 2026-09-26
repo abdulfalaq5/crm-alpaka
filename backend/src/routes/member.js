@@ -13,7 +13,7 @@ const { receiptUpload, filePath } = require('../services/files');
 const { signToken } = require('../middleware/auth');
 const mailer = require('../services/mailer');
 const whatsapp = require('../services/whatsapp');
-const { imageUrl } = require('../services/rewardImages');
+const rewardsService = require('../services/rewards');
 const { validate } = require('../utils/validate');
 const { asyncHandler, parsePagination, notFound, unprocessable, conflict } = require('../utils/http');
 const { contact, readContact, password } = require('./auth');
@@ -205,28 +205,14 @@ router.get(
 router.get(
   '/rewards',
   asyncHandler(async (req, res) => {
-    // Katalog reward (tambahan.md poin 2): hanya aktif, dalam masa berlaku, dan stok belum habis; tier ditampilkan untuk info.
-    const { rows } = await pool.query(
-      `SELECT r.id, r.nama, r.deskripsi, r.poin_dibutuhkan, r.gambar_file, r.stok, r.valid_until,
-              r.tier_minimum_id, t.nama AS tier_minimum_nama, t.urutan AS tier_minimum_urutan, t2.urutan AS urutan_member
-         FROM rewards r
-         LEFT JOIN tiers t ON t.id = r.tier_minimum_id
-         LEFT JOIN members m ON m.id = $1
-         LEFT JOIN tiers t2 ON t2.id = m.current_tier_id
-        WHERE r.aktif = TRUE
-          AND (r.stok IS NULL OR r.stok > 0)
-          AND (r.valid_from IS NULL OR r.valid_from <= CURRENT_DATE)
-          AND (r.valid_until IS NULL OR r.valid_until >= CURRENT_DATE)
-        ORDER BY r.poin_dibutuhkan, r.id`,
-      [req.user.id]
-    );
-    res.json({
-      data: rows.map(({ gambar_file, tier_minimum_urutan, urutan_member, ...r }) => ({
-        ...r,
-        gambar_url: imageUrl({ ...r, gambar_file }),
-        memenuhi_tier: !r.tier_minimum_id || (urutan_member ?? -1) >= tier_minimum_urutan,
-      })),
-    });
+    res.json({ data: await rewardsService.katalog(pool, req.user.id) });
+  })
+);
+
+router.get(
+  '/rewards/:id',
+  asyncHandler(async (req, res) => {
+    res.json({ data: await rewardsService.detail(pool, req.params.id, req.user.id) });
   })
 );
 

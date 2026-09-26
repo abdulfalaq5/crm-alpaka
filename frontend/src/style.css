@@ -1,4 +1,5 @@
-/* Design token Alpaka (usulan berbasis gaya minimal/monokrom brand — ganti bila brand guideline resmi tersedia) */
+/* Design token Alpaka (usulan berbasis gaya minimal/monokrom brand — ganti bila brand guideline resmi tersedia).
+   Palet mengikuti referensi desain "More Rewards Hub" (netral hangat + aksen near-black). */
 :root {
   --color-bg: #faf9f7;
   --color-surface: #ffffff;
@@ -10,6 +11,9 @@
   --color-success: #3f7a56;
   --color-warning: #b8862e;
   --color-danger: #b23b3b;
+  --color-line: #edebe6;
+  --color-warm: #ecdcbc;
+  --color-warm-foreground: #5c4832;
   --radius: 4px;
 }
 
@@ -19,7 +23,7 @@ body {
   margin: 0;
   background: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Figtree', 'Inter', 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.55;
 }
@@ -39,6 +43,7 @@ h1, h2, h3, .section-label { letter-spacing: -0.01em; }
 .brand { font-weight: 700; letter-spacing: 0.28em; font-size: 18px; color: var(--color-text-primary); text-decoration: none; }
 
 .container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+.container.wide { max-width: 1320px; }
 @media (min-width: 768px) { .container { padding: 40px 32px 64px; } }
 
 .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 20px; }
@@ -58,6 +63,11 @@ h1, h2, h3, .section-label { letter-spacing: -0.01em; }
 .reward-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .reward-card { display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
 .reward-visual { aspect-ratio: 4 / 3; background: #efece7; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; letter-spacing: 0.1em; color: #bdb8ae; }
+/* Klik gambar/kartu untuk membuka detail reward (katalog member) */
+button.reward-visual { width: 100%; border: 0; padding: 0; font: inherit; cursor: pointer; }
+button.reward-visual:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.reward-detail-visual { aspect-ratio: 4 / 3; background: #efece7; display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 700; letter-spacing: 0.1em; color: #bdb8ae; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+.reward-detail-visual img { width: 100%; height: 100%; object-fit: cover; }
 .reward-body { padding: 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .reward-body h3 { margin: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em; }
 
@@ -105,3 +115,109 @@ h1, h2, h3, .section-label { letter-spacing: -0.01em; }
 
 /* Teks kecil di bawah nilai utama sel (email, keterangan); boleh dipatah di mana saja agar tabel tidak melebar. */
 .cell-sub { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+button.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--color-primary); cursor: pointer; text-align: left; }
+
+/* ============================================================================
+   Dashboard member — mengikuti referensi desain "More Rewards Hub" (morello-member-hub).
+   Gaya: editorial minimal, sudut tajam, label micro uppercase bertracking lebar,
+   kartu putih di atas latar netral hangat, aksen near-black.
+   ========================================================================== */
+.dash { max-width: 1320px; margin: 0 auto; padding-bottom: 56px; }
+.dash > * + * { margin-top: 44px; }
+.dash .soft-in { animation: soft-in 0.28s ease-out both; }
+@keyframes soft-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .dash .soft-in { animation: none; } }
+
+/* Label micro (kicker/eyebrow) */
+.dash .kicker { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.17em; color: var(--color-text-secondary); }
+
+/* --- Sapaan --- */
+.dash-greet { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 0 !important; }
+.dash-greet h1 { margin: 0; font-size: 30px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+@media (min-width: 768px) { .dash-greet h1 { font-size: 38px; } }
+.dash-greet h1 .dot { color: var(--color-text-secondary); }
+.dash-greet p.sub { margin: 8px 0 0; font-size: 13px; color: var(--color-text-secondary); }
+.tier-pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--color-border); background: var(--color-surface); padding: 8px 12px; font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.tier-pill .led { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
+
+/* --- Hero: banner editorial + kartu poin gelap --- */
+.dash-hero { display: grid; gap: 16px; }
+@media (min-width: 1200px) { .dash-hero { grid-template-columns: 1.65fr 1fr; } }
+.hero-banner { position: relative; min-height: 265px; overflow: hidden; background: var(--color-warm); }
+@media (min-width: 768px) { .hero-banner { min-height: 300px; } }
+.hero-banner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.hero-banner .fade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(250, 249, 247, 0.97) 0%, rgba(250, 249, 247, 0.88) 42%, rgba(250, 249, 247, 0) 100%); }
+.hero-banner .inner { position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 265px; padding: 28px; }
+@media (min-width: 768px) { .hero-banner .inner { min-height: 300px; padding: 36px; } }
+.hero-banner h2 { max-width: 330px; margin: 24px 0 0; font-size: 30px; font-weight: 600; line-height: 1.15; }
+@media (min-width: 768px) { .hero-banner h2 { font-size: 38px; } }
+.hero-banner .cta { align-self: flex-start; margin-top: 28px; }
+
+.hero-points { display: flex; flex-direction: column; justify-content: space-between; background: var(--color-accent); color: var(--color-accent-contrast); padding: 28px; }
+@media (min-width: 768px) { .hero-points { padding: 36px; } }
+.hero-points .kicker { color: rgba(255, 255, 255, 0.62); }
+.hero-points .amount { margin: 12px 0 0; font-size: 46px; font-weight: 600; line-height: 1; }
+@media (min-width: 768px) { .hero-points .amount { font-size: 56px; } }
+.hero-points .unit { margin: 4px 0 0; font-size: 14px; color: rgba(255, 255, 255, 0.66); }
+.hero-points .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, 0.2); font-size: 12px; color: rgba(255, 255, 255, 0.66); }
+.hero-points .split { display: flex; gap: 20px; margin-top: 14px; font-size: 12px; color: rgba(255, 255, 255, 0.66); }
+.hero-points .split b { display: block; font-size: 15px; font-weight: 600; color: var(--color-accent-contrast); }
+.link-arrow { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: inherit; text-decoration: none; cursor: pointer; }
+.link-arrow:hover { text-decoration: underline; }
+.link-arrow.dark { color: var(--color-text-primary); }
+
+/* --- Kartu tier & voucher --- */
+.dash-two { display: grid; gap: 16px; }
+@media (min-width: 768px) { .dash-two { grid-template-columns: 1fr 1fr; } }
+.panel { border: 1px solid var(--color-border); background: var(--color-surface); padding: 24px; }
+@media (min-width: 768px) { .panel { padding: 28px; } }
+.panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.panel-head h3 { margin: 12px 0 0; font-size: 24px; font-weight: 600; }
+.panel-head h3 .soft { font-size: 14px; font-weight: 400; color: var(--color-text-secondary); }
+.panel-body { margin: 22px 0 0; font-size: 12px; line-height: 1.7; color: var(--color-text-secondary); }
+.bar { height: 6px; background: var(--color-line); }
+.bar > i { display: block; height: 100%; background: var(--color-accent); }
+.bar-note { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--color-text-secondary); }
+.panel .foot { margin-top: 18px; }
+
+/* --- Kartu kode voucher di dashboard --- */
+.code-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.code-chips code { border: 1px dashed var(--color-border); background: var(--color-bg); padding: 6px 10px; font-size: 12px; letter-spacing: 0.06em; }
+
+/* --- Judul seksi --- */
+.section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.section-head h2 { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.2; }
+@media (min-width: 768px) { .section-head h2 { font-size: 25px; } }
+
+/* --- Kartu hadiah (katalog ringkas) --- */
+.gift-grid { display: grid; gap: 16px; }
+@media (min-width: 640px) { .gift-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .gift-grid { grid-template-columns: repeat(3, 1fr); } }
+.gift-card { display: flex; flex-direction: column; border: 1px solid var(--color-border); background: var(--color-surface); transition: border-color 0.15s ease; }
+.gift-card:hover { border-color: var(--color-text-secondary); }
+.gift-card .visual { position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 1.45; overflow: hidden; background: var(--color-line); }
+.gift-card .visual img { width: 100%; height: 100%; object-fit: cover; }
+.gift-card .visual .placeholder { display: flex; flex-direction: column; align-items: center; gap: 10px; background: var(--color-warm); color: var(--color-warm-foreground); }
+.gift-card .visual .placeholder .tagline { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; }
+.gift-card .visual .badge { position: absolute; top: 14px; left: 14px; background: var(--color-surface); padding: 5px 9px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.gift-card .body { display: flex; flex: 1; flex-direction: column; padding: 20px; }
+.gift-card .body h3 { min-height: 44px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.gift-card .body .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--color-line); }
+.gift-card .body .cost small { display: block; font-size: 10px; color: var(--color-text-secondary); }
+.gift-card .body .cost b { font-size: 14px; font-weight: 700; }
+.gift-card .body .cost b span { font-size: 12px; font-weight: 400; }
+.gift-card.locked { opacity: 0.72; }
+
+/* --- Baris riwayat poin --- */
+.activity { border: 1px solid var(--color-border); background: var(--color-surface); padding: 0 20px; }
+@media (min-width: 768px) { .activity { padding: 0 28px; } }
+.activity-row { display: flex; align-items: center; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--color-line); }
+.activity-row:last-child { border-bottom: 0; }
+.activity-row .ico { display: flex; flex: none; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-line); color: var(--color-text-primary); }
+.activity-row.out .ico { background: var(--color-warm); color: var(--color-warm-foreground); }
+.activity-row .who { min-width: 0; flex: 1; }
+.activity-row .who .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.activity-row .who .m { margin-top: 2px; font-size: 11px; color: var(--color-text-secondary); }
+.activity-row .delta { flex: none; font-size: 13px; font-weight: 600; }
+.activity-row .delta.in { color: var(--color-success); }
+.activity-row .delta.flat { color: var(--color-text-secondary); font-weight: 500; }

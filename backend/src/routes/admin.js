@@ -11,6 +11,7 @@ const { sendReceiptFile } = require('./member');
 const bcrypt = require('bcryptjs');
 const { correctReceipt } = require('../services/corrections');
 const { rewardImageUpload, saveRewardImage, removeRewardImage, imageUrl } = require('../services/rewardImages');
+const rewardsService = require('../services/rewards');
 const { conflict } = require('../utils/http');
 const { writeAccess, superOnly } = require('../middleware/adminRole');
 const tiersService = require('../services/tiers');
@@ -203,7 +204,7 @@ const rewardSchema = Joi.object({
 const withImage = ({ gambar_file, gambar_mime, ...r }) => ({
   ...r,
   gambar_url: imageUrl({ ...r, gambar_file }),
-  status_stok: r.stok === null ? null : r.stok > 0 ? 'tersedia' : 'habis',
+  status_stok: rewardsService.statusStok(r.stok),
 });
 
 router.get('/rewards', asyncHandler(async (req, res) => {

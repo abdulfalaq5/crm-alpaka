@@ -6,6 +6,7 @@ const { evaluateAutoApprove } = require('../src/services/autoApprove');
 const { normalizePhone } = require('../src/utils/phone');
 const { tierForPoints, progress } = require('../src/services/tiers');
 const { efektifStatus } = require('../src/services/vouchers');
+const { alasanTersedia, alasanTerkunci, statusStok, untukMember } = require('../src/services/rewards');
 
 test('hitungPoin: pembulatan & minimal transaksi', () => {
   const rule = { rupiah_per_poin: 10000, pembulatan: 'bawah', minimal_transaksi: 0 };
@@ -157,4 +158,81 @@ test('efektifStatus: status final tidak diubah walau tanggalnya sudah lewat', ()
   for (const status of ['used', 'expired', 'void']) {
     assert.equal(efektifStatus({ status, expires_at: '2020-01-01T00:00:00Z' }, now), status);
   }
+});
+
+// ---- Reward Catalog (tambahan.md poin 2) ----
+test('alasanTerkunci: reward tanpa syarat tidak terkunci', () => {
+  assert.equal(alasanTerkunci({ stok: null }, 0, '2026-09-26'), null);
+  assert.equal(alasanTerkunci({ stok: 5 }, 0, '2026-09-26'), null);
+});
+
+test('alasanTersedia: hanya stok & masa tampil, tier tidak ikut', () => {
+  const hari = '2026-09-26';
+  assert.equal(alasanTersedia({ stok: null, tier_minimum_id: '4' }, hari), null);
+  assert.equal(alasanTersedia({ stok: 0 }, hari).kode, 'stok_habis');
+  assert.equal(alasanTersedia({ stok: null, valid_until: '2026-09-25' }, hari).kode, 'tidak_berlaku');
+});
+
+test('alasanTerkunci: stok habis', () => {
+  const lock = alasanTerkunci({ stok: 0 }, 0, '2026-09-26');
+  assert.equal(lock.kode, 'stok_habis');
+  assert.equal(lock.field, 'Stok habis');
+  assert.equal(alasanTerkunci({ stok: null }, 0, '2026-09-26'), null); // null = tanpa batas
+});
+
+test('alasanTerkunci: masa tampil dibandingkan per tanggal, bukan per jam', () => {
+  const hari = '2026-09-26';
+  // Masih berlaku sampai hari yang sama: boleh (katalog & redeem harus sepakat).
+  assert.equal(alasanTerkunci({ stok: null, valid_from: '2026-09-26', valid_until: '2026-09-26' }, 0, hari), null);
+  assert.equal(alasanTerkunci({ stok: null, valid_from: '2026-09-27' }, 0, hari).kode, 'belum_tersedia');
+  assert.equal(alasanTerkunci({ stok: null, valid_until: '2026-09-25' }, 0, hari).kode, 'tidak_berlaku');
+  // Kolom DATE dari Postgres datang sebagai Date; hasilnya harus sama dengan string.
+  assert.equal(alasanTerkunci({ stok: null, valid_from: new Date('2026-09-27T00:00:00') }, 0, hari).kode, 'belum_tersedia');
+});
+
+test('alasanTerkunci: tier minimum', () => {
+  const r = { stok: null, tier_minimum_id: '2', tier_minimum_nama: 'Gold', tier_minimum_urutan: 2 };
+  assert.equal(alasanTerkunci(r, 1, '2026-09-26').kode, 'tier');
+  assert.equal(alasanTerkunci(r, 1, '2026-09-26').field, 'Tier belum memenuhi syarat');
+  assert.match(alasanTerkunci(r, 1, '2026-09-26').pesan, /tier Gold ke atas/);
+  assert.equal(alasanTerkunci(r, 2, '2026-09-26'), null);
+  // Member tanpa tier (-1) tidak bisa reward eksklusif tier.
+  assert.equal(alasanTerkunci(r, null, '2026-09-26').kode, 'tier');
+});
+
+test('alasanTerkunci: stok diperiksa sebelum tier', () => {
+  const r = { stok: 0, tier_minimum_id: '2', tier_minimum_nama: 'Gold', tier_minimum_urutan: 2 };
+  assert.equal(alasanTerkunci(r, 0, '2026-09-26').kode, 'stok_habis');
+});
+
+test('statusStok: null berarti tanpa batas', () => {
+  assert.equal(statusStok(null), 'tanpa_batas');
+  assert.equal(statusStok(3), 'tersedia');
+  assert.equal(statusStok(0), 'habis');
+});
+
+test('untukMember: bentuk respons katalog', () => {
+  const r = untukMember({
+    id: '7', nama: 'Tote Bag', poin_dibutuhkan: 30, stok: 2, aktif: true, gambar_file: null,
+    tier_minimum_id: null, tier_minimum_nama: null, tier_minimum_urutan: null, urutan_member: 1,
+  });
+  assert.equal(r.bisa_ditukar, true);
+  assert.equal(r.alasan_kode, null);
+  assert.equal(r.alasan_terkunci, null);
+  assert.equal(r.memenuhi_tier, true);
+  assert.equal(r.status_stok, 'tersedia');
+  assert.equal(r.gambar_url, null);
+  assert.ok(!('gambar_file' in r), 'gambar_file internal tidak boleh keluar');
+  assert.ok(!('urutan_member' in r), 'urutan tier internal tidak boleh keluar');
+});
+
+test('untukMember: tier belum terpenuhi tetap dikembalikan dengan alasannya', () => {
+  const r = untukMember({
+    id: '7', nama: 'Tote Bag', poin_dibutuhkan: 30, stok: null, aktif: true, gambar_file: null,
+    tier_minimum_id: '3', tier_minimum_nama: 'Platinum', tier_minimum_urutan: 3, urutan_member: 1,
+  });
+  assert.equal(r.memenuhi_tier, false);
+  assert.equal(r.bisa_ditukar, false);
+  assert.equal(r.alasan_kode, 'tier');
+  assert.equal(r.status_stok, 'tanpa_batas');
 });

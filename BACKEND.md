@@ -103,7 +103,7 @@ Jalankan sebagai service terpisah yang dipanggil otomatis setelah upload (Modul 
 
 ## 6. Modul Redeem Poin Semi-Manual (RDM)
 
-1. Buat model `rewards` sederhana (nama, poin_dibutuhkan, aktif) dan endpoint `GET /rewards` untuk ditampilkan ke member (RDM-07, OI-09).
+1. Buat model `rewards` (nama, poin_dibutuhkan, aktif, stok opsional, tier minimum, masa tampil `valid_from`/`valid_until`, `berlaku_hari`) dan endpoint `GET /rewards` (katalog member) plus `GET /rewards/:id` (detail) (RDM-07, OI-09). Seluruh query & aturan ketersediaan ada di `services/rewards.js`.
 2. Buat endpoint `POST /redeem` — validasi saldo **tersedia** mencukupi sebelum diproses (RDM-01, BR-09).
 3. Jika mencukupi: buat entri `points_ledger` jenis `hold` sejumlah poin redeem, set status `redeems` menjadi `menunggu_persetujuan` (RDM-02, RDM-03). Jalankan dalam transaksi atomik agar dua request redeem bersamaan tidak menembus saldo (RDM-06, BR-09).
 4. Jika saldo tidak cukup: tolak dengan pesan jelas, tanpa membuat entri hold (langkah 2 dokumen Bagian 3.4).
@@ -118,13 +118,15 @@ Jalankan sebagai service terpisah yang dipanggil otomatis setelah upload (Modul 
 8. (Disarankan) Buat endpoint `POST /redeem/:id/cancel` bagi member untuk membatalkan pengajuan yang **belum diproses admin** — sama seperti reject, lepas hold, status → `dibatalkan` (RDM-08, OI-10).
 9. Catat semua keputusan approve/reject/cancel ke `audit_logs` (konsisten dengan Modul 4).
 
-**Item terbuka:** OI-09 (bentuk reward & cara pemberian), OI-10 (boleh dibatalkan atau tidak).
+**Aturan ketersediaan reward** (`services/rewards.js`): katalog hanya menampilkan reward aktif yang stoknya belum habis dan masih dalam masa tampil; reward eksklusif tier tetap tampil dengan `memenuhi_tier: false` supaya alasannya terlihat. Fungsi `alasanTersedia` (stok + masa tampil) dan `alasanTerkunci` (tambah syarat tier) dipakai bersama oleh katalog dan `createRedeem`, sehingga apa yang tampil di katalog pasti bisa diredeem. Reward nonaktif balas 404 di `GET /rewards/:id`, sedangkan stok habis/kedaluwarsa tetap dikembalikan dengan `bisa_ditukar: false` + `alasan_terkunci` agar tautan lama tidak membingungkan.
+
+**Item terbuka:** OI-10 (boleh dibatalkan atau tidak).
 
 ---
 
 ## 6B. Modul Voucher Management (VCH — tambahan.md poin 3 & 6)
 
-Layanan: `backend/src/services/vouchers.js`. Semua operasi tulis membungkus baris member (`SELECT … FOR UPDATE`) dan baris voucher di dalam transaksi atomik agar request bersamaan tidak membalik status atau	do membakar saldo (NFR-05, BR-09).
+Layanan: `backend/src/services/vouchers.js`. Semua operasi tulis membungkus baris member (`SELECT … FOR UPDATE`) dan baris voucher di dalam transaksi atomik agar request bersamaan tidak membalik status atau membakar saldo (NFR-05, BR-09).
 
 1. **Terbit saat approve** — kode `ALP-XXXXXXXX` (prefix tetap + 8 karakter acak dari alphabet tanpa karakter ambigu), `vouchers.sumber = 'redeem'`, masa berlaku dari `rewards.berlaku_hari` (default 30 hari).
 2. **Generate manual oleh admin** — `POST /admin/vouchers` (`member_id`, `reward_id`, `jumlah` 1–25, `berlaku_hari` opsional, `catatan` opsional). Voucher manual tetap terikat ke satu redeem (`sumber = 'manual'`, status `selesai`) supaya transaksi poin dan laporan 1:1 — bukan voucher "melayang" tanpa jejak. Pemeriksaan: member aktif, reward ada, saldo **tersedia** cukup, dan stok cukup (bila reward dibatasi).
