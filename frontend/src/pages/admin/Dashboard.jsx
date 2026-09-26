@@ -1,8 +1,22 @@
-import { Button, Col, Row, Table } from 'antd';
+import { Alert, Button, Skeleton } from 'antd';
+import {
+  ArrowRightOutlined,
+  DownloadOutlined,
+  FileDoneOutlined,
+  GiftOutlined,
+  SwapOutlined,
+  TagOutlined,
+  TeamOutlined,
+  ThunderboltOutlined,
+  TrophyOutlined,
+} from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { useLoad } from '../../hooks';
-import { num } from '../../format';
+import { fmtDate, num, rupiah } from '../../format';
 import EmptyState from '../../components/EmptyState';
+
+const PEMBULATAN = { bawah: 'Ke bawah', atas: 'Ke atas', terdekat: 'Terdekat' };
 
 // href biasa tidak menyertakan token (Authorization ada di header, bukan cookie) — unduh lewat blob.
 async function downloadCsv(path, filename) {
@@ -15,54 +29,202 @@ async function downloadCsv(path, filename) {
   URL.revokeObjectURL(url);
 }
 
-const Stat = ({ label, value }) => (
-  <div className="card" style={{ textAlign: 'center' }}>
-    <div className="section-label" style={{ marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
+const Stat = ({ label, value, sub }) => (
+  <div className="metric">
+    <p className="kicker">{label}</p>
+    <p className="value">{value}</p>
+    {sub && <p className="sub">{sub}</p>}
   </div>
 );
 
-// Basic metrics untuk Admin Dashboard (tambahan.md poin 6).
+const Row = ({ label, value, tone }) => (
+  <div className="mini-row">
+    <span>{label}</span>
+    <b className={tone}>{value}</b>
+  </div>
+);
+
+const Bar = ({ value, max }) => {
+  const lebar = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="bar" role="progressbar" aria-valuenow={lebar} aria-valuemin={0} aria-valuemax={100}>
+      <i style={{ width: `${lebar}%` }} />
+    </div>
+  );
+};
+
+const Panel = ({ kicker, title, icon, to, children, action = 'Kelola' }) => (
+  <div className="panel">
+    <div className="panel-head">
+      <div>
+        <p className="kicker">{kicker}</p>
+        <h3>{title}</h3>
+      </div>
+      {icon}
+    </div>
+    <div className="panel-body">{children}</div>
+    {to && (
+      <div className="foot">
+        <Link className="link-arrow dark" to={to}>
+          {action} <ArrowRightOutlined style={{ fontSize: 10 }} />
+        </Link>
+      </div>
+    )}
+  </div>
+);
+
+// Dashboard admin: satu kartu per domain (member, struk, aturan poin, reward, voucher) + metrik dasar.
+// Semua angka dari endpoint /admin/metrics (agregat backend), bukan dihitung ulang di frontend.
 export default function AdminDashboard() {
-  const { data } = useLoad('/admin/metrics');
+  const navigate = useNavigate();
+  const { data, loading, error } = useLoad('/admin/metrics');
   const m = data?.data;
+  const tierMax = Math.max(1, ...(m?.member?.tier || []).map((t) => t.jumlah_member));
 
   return (
-    <>
-      <h1 className="page-title">Dashboard</h1>
-      <p className="page-sub">Ringkasan operasional program loyalty.</p>
-      <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}><Stat label="Member aktif" value={m ? num(m.member_aktif) : '–'} /></Col>
-        <Col xs={12} md={6}><Stat label="Total member" value={m ? num(m.member_total) : '–'} /></Col>
-        <Col xs={12} md={6}><Stat label="Poin beredar" value={m ? num(m.poin_beredar) : '–'} /></Col>
-        <Col xs={12} md={6}><Stat label="Redemption rate" value={m ? `${m.redemption_rate}%` : '–'} /></Col>
-      </Row>
-      <Row gutter={[12, 12]} style={{ marginTop: 12 }}>
-        <Col xs={24} md={12}>
-          <div className="card">
-            <p className="section-label">Sebaran tier</p>
-            {!m?.tier.length ? <EmptyState text="Belum ada tier" /> : (
-              <Table rowKey="nama" size="small" pagination={false} dataSource={m.tier} columns={[{ title: 'Tier', dataIndex: 'nama' }, { title: 'Member', dataIndex: 'jumlah_member', align: 'right' }]} />
-            )}
-          </div>
-        </Col>
-        <Col xs={24} md={12}>
-          <div className="card">
-            <p className="section-label">Top reward ditukar</p>
-            {!m?.top_reward.length ? <EmptyState text="Belum ada redeem selesai" /> : (
-              <Table rowKey="nama" size="small" pagination={false} dataSource={m.top_reward} columns={[{ title: 'Reward', dataIndex: 'nama' }, { title: 'Jumlah', dataIndex: 'jumlah', align: 'right' }]} />
-            )}
-          </div>
-        </Col>
-      </Row>
-      <div className="card">
-        <p className="section-label">Export laporan (CSV)</p>
-        <div className="actions">
-          <Button onClick={() => downloadCsv('/admin/export/members.csv', 'member.csv')}>Member</Button>
-          <Button onClick={() => downloadCsv('/admin/export/receipts.csv', 'struk.csv')}>Struk</Button>
-          <Button onClick={() => downloadCsv('/admin/export/redeems.csv', 'redeem.csv')}>Redeem</Button>
+    <div className="dash dense adash">
+      <header className="dash-greet soft-in">
+        <div>
+          <p className="kicker">Ringkasan program</p>
+          <h1>
+            Dashboard
+            <span className="dot">.</span>
+          </h1>
+          <p className="sub">Kondisi member, struk, aturan poin, reward, dan voucher dalam satu layar.</p>
         </div>
-      </div>
-    </>
+        <div className="actions">
+          <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadCsv('/admin/export/members.csv', 'member.csv')}>
+            Member
+          </Button>
+          <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadCsv('/admin/export/receipts.csv', 'struk.csv')}>
+            Struk
+          </Button>
+          <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadCsv('/admin/export/redeems.csv', 'redeem.csv')}>
+            Redeem
+          </Button>
+        </div>
+      </header>
+
+      {error && <Alert type="error" showIcon message={error} />}
+      {loading && !m && <Skeleton active paragraph={{ rows: 6 }} />}
+
+      {m && (
+        <>
+          <section className="metric-strip soft-in">
+            <Stat label="Member aktif" value={num(m.member_aktif)} sub={`dari ${num(m.member_total)} total`} />
+            <Stat label="Poin beredar" value={num(m.poin_beredar)} sub={`+${num(m.poin_bulan.masuk)} masuk 30 hari`} />
+            <Stat
+              label="Struk menunggu"
+              value={num(m.struk.menunggu_review)}
+              sub={`${num(m.struk.total)} struk terkirim`}
+            />
+            <Stat label="Redemption rate" value={`${m.redemption_rate}%`} sub="redeem selesai / total" />
+          </section>
+
+          <section className="adash-grid soft-in">
+            <Panel kicker="Member" title={`${num(m.member.total)} member`} icon={<TeamOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />} to="/admin/member">
+              <Row label="Aktif" value={num(m.member.aktif)} />
+              <Row label="Nonaktif" value={num(m.member.nonaktif)} />
+              <Row label="Daftar 30 hari" value={num(m.member.baru_bulan)} />
+              <div className="tier-bars">
+                {m.member.tier.map((t) => (
+                  <div className="tier-bar" key={t.nama}>
+                    <div className="bar-note">
+                      <span>{t.nama}</span>
+                      <b>{num(t.jumlah_member)}</b>
+                    </div>
+                    <Bar value={t.jumlah_member} max={tierMax} />
+                  </div>
+                ))}
+              </div>
+            </Panel>
+
+            <Panel
+              kicker="Invoice"
+              title={m.struk.menunggu_review > 0 ? `${num(m.struk.menunggu_review)} perlu review` : 'Antrean bersih'}
+              icon={<FileDoneOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />}
+              to="/admin/struk"
+              action="Buka antrean struk"
+            >
+              <Row label="Total struk" value={num(m.struk.total)} />
+              <Row label="Menunggu review" value={num(m.struk.menunggu_review)} tone={m.struk.menunggu_review ? 'warn' : undefined} />
+              <Row label="Disetujui" value={num(m.struk.disetujui)} />
+              <Row label="Ditolak" value={num(m.struk.ditolak)} />
+              <div className="panel-body foot">
+                30 hari terakhir: {num(m.struk.disetujui_bulan)} disetujui, {num(m.struk.ditolak_bulan)} ditolak.
+              </div>
+            </Panel>
+
+            <Panel
+              kicker="Point rules"
+              title={m.point_rule.rupiah_per_poin ? `${rupiah(m.point_rule.rupiah_per_poin)} / poin` : 'Belum diatur'}
+              icon={<ThunderboltOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />}
+              to="/admin/pengaturan"
+              action="Atur poin"
+            >
+              <Row label="Rupiah per poin" value={m.point_rule.rupiah_per_poin ? rupiah(m.point_rule.rupiah_per_poin) : '–'} />
+              <Row label="Pembulatan" value={PEMBULATAN[m.point_rule.pembulatan] || m.point_rule.pembulatan || '–'} />
+              <Row label="Minimal transaksi" value={rupiah(m.point_rule.minimal_transaksi || 0)} />
+              <Row label="Aturan channel" value={`${num(m.point_rule.channel)} channel`} />
+            </Panel>
+
+            <Panel
+              kicker="Reward"
+              title={`${num(m.reward.total)} reward`}
+              icon={<GiftOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />}
+              to="/admin/reward"
+            >
+              <Row label="Aktif" value={num(m.reward.aktif)} />
+              <Row label="Nonaktif" value={num(m.reward.total - m.reward.aktif)} />
+              <Row label="Stok habis" value={num(m.reward.stok_habis)} tone={m.reward.stok_habis ? 'warn' : undefined} />
+              <Row label="Khusus tier" value={num(m.reward.tier_khusus)} />
+              <div className="panel-body foot">
+                {m.reward.berlaku_sampai ? `Berlaku paling lambat ${fmtDate(m.reward.berlaku_sampai)}.` : 'Seluruh reward berlaku tanpa batas waktu.'}
+              </div>
+            </Panel>
+
+            <Panel
+              kicker="Voucher"
+              title={`${num(m.voucher.active)} aktif`}
+              icon={<TagOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />}
+              to="/admin/voucher"
+            >
+              <Row label="Aktif" value={num(m.voucher.active)} />
+              <Row label="Reserved" value={num(m.voucher.reserved)} />
+              <Row label="Terpakai" value={num(m.voucher.used)} />
+              <Row label="Kedaluwarsa" value={num(m.voucher.expired)} />
+              <Row label="Void" value={num(m.voucher.void)} />
+            </Panel>
+
+            <Panel
+              kicker="Performa"
+              title="Reward terlaris"
+              icon={<TrophyOutlined style={{ fontSize: 22, color: 'var(--color-text-secondary)' }} />}
+              to="/admin/redeem"
+              action="Buka antrean redeem"
+            >
+              {m.top_reward.length === 0 ? (
+                <EmptyState text="Belum ada redeem selesai" />
+              ) : (
+                m.top_reward.map((r, i) => (
+                  <Row key={r.nama} label={`${i + 1}. ${r.nama}`} value={`${num(r.jumlah)}x`} />
+                ))
+              )}
+              <div className="panel-body foot">
+                <SwapOutlined /> {num(m.poin_bulan.keluar)} poin keluar 30 hari terakhir.
+              </div>
+            </Panel>
+          </section>
+
+          <div className="actions soft-in">
+            <Button type="primary" onClick={() => navigate('/admin/struk')}>
+              Review Struk ({num(m.struk.menunggu_review)})
+            </Button>
+            <Button onClick={() => navigate('/admin/member')}>Kelola Member</Button>
+            <Button onClick={() => navigate('/admin/voucher')}>Kelola Voucher</Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

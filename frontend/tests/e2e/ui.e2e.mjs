@@ -81,6 +81,21 @@ await step('lupa password: form terkirim', async () => { await r2.goto(BASE + '/
 // ================= ADMIN =================
 const a = await newPage();
 await step('login admin', async () => { await login(a, 'admin@alpaka.local', 'Admin-Alpaka-2026', '/admin/login'); await a.getByText('Antrean Struk').first().waitFor(); });
+await step('admin: dashboard — metrik dasar + 6 kartu domain', async () => {
+  await a.goto(BASE + '/admin');
+  await a.locator('.metric-strip .metric').first().waitFor({ timeout: 8000 });
+  if ((await a.locator('.metric-strip .metric').count()) !== 4) throw new Error('metrik dasar harus 4 kartu');
+  for (const kicker of ['Member', 'Invoice', 'Point rules', 'Reward', 'Voucher', 'Performa']) {
+    if (!(await a.locator('.adash-grid .panel', { hasText: kicker }).count())) throw new Error('kartu domain hilang: ' + kicker);
+  }
+  await a.getByRole('link', { name: /Buka antrean struk/ }).waitFor();
+  await a.getByRole('link', { name: /Atur poin/ }).waitFor();
+  await shot(a, 'a-dashboard');
+});
+await step('admin: dashboard — tautan kartu ke halaman terkait', async () => {
+  await a.getByRole('link', { name: /Kelola$/ }).first().click();
+  await a.waitForURL(/\/admin\/member$/, { timeout: 8000 });
+});
 await step('admin: antrean struk + ringkasan', async () => { await a.getByText('UI-TEST-001').waitFor(); await shot(a, 'a-queue'); });
 await step('admin: review struk (bukti + validasi)', async () => { await a.getByText('UI-TEST-001').click(); await a.getByText('Hasil validasi otomatis').waitFor(); await a.locator('.file-tile img, .file-tile iframe').first().waitFor({ timeout: 6000 }); await shot(a, 'a-review'); });
 await step('admin: tolak wajib alasan', async () => { await a.getByRole('button', { name: 'Tolak', exact: true }).click(); await a.getByRole('button', { name: 'Tolak struk' }).click(); await a.getByText('Alasan penolakan wajib diisi').waitFor(); });

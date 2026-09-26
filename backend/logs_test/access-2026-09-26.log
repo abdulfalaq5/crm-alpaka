@@ -1,0 +1,11 @@
+2026-09-26T08:57:21.278Z ::1 - GET /api/health 200 7.3ms
+2026-09-26T09:15:15.276Z ::ffff:127.0.0.1 - POST /api/auth/admin/login 200 78.1ms
+2026-09-26T09:15:16.069Z ::ffff:127.0.0.1 admin#1 GET /api/admin/summary 200 24.5ms
+2026-09-26T09:15:16.073Z ::ffff:127.0.0.1 admin#1 GET /api/admin/metrics 200 30.8ms
+2026-09-26T09:15:16.077Z ::ffff:127.0.0.1 admin#1 GET /api/admin/summary 304 3.6ms
+2026-09-26T09:15:16.084Z ::ffff:127.0.0.1 admin#1 GET /api/admin/metrics 304 5.3ms
+2026-09-26T09:15:29.692Z ::ffff:127.0.0.1 - POST /api/auth/admin/login 200 82.2ms
+2026-09-26T09:15:30.400Z ::ffff:127.0.0.1 admin#1 GET /api/admin/summary 200 17.3ms
+2026-09-26T09:15:30.403Z ::ffff:127.0.0.1 admin#1 GET /api/admin/metrics 200 21.5ms
+2026-09-26T09:15:30.409Z ::ffff:127.0.0.1 admin#1 GET /api/admin/summary 304 5.0ms
+2026-09-26T09:15:30.411Z ::ffff:127.0.0.1 admin#1 GET /api/admin/metrics 304 6.2ms

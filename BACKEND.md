@@ -169,6 +169,23 @@ Layanan: `backend/src/services/vouchers.js`. Semua operasi tulis membungkus bari
 
 ---
 
+## 8b. Metrik Dashboard Admin (ADM-06)
+
+`GET /admin/metrics` (admin) — agregat langsung dari tabel, satu request untuk seluruh dashboard:
+
+| Bagian | Isi |
+|---|---|
+| Metrik dasar | `member_total`, `member_aktif`, `poin_beredar` (masuk − terpakai/koreksi), `redemption_rate` |
+| `member` | total/aktif/nonaktif, daftar 30 hari, sebaran tier |
+| `struk` | total, `menunggu_review`, disetujui, ditolak + keputusan 30 hari terakhir |
+| `point_rule` | aturan default (rupiah per poin, pembulatan, minimal transaksi) + jumlah aturan channel |
+| `poin_bulan` | poin masuk/keluar 30 hari terakhir |
+| `reward` | total, aktif, stok habis, tanpa batas stok, khusus tier, masa berlaku terdekat |
+| `voucher` | jumlah per status (`active`/`reserved`/`used`/`expired`/`void`, selalu lengkap dengan 0) |
+| `top_reward`, `tier` | 5 reward terlaris (redeem selesai) dan sebaran tier |
+
+---
+
 ## Non-Fungsional yang Wajib Diterapkan di Level Backend
 
 | Kebutuhan | Implementasi |

@@ -62,7 +62,7 @@ export default function AdminLayout() {
           </Button>
         </Layout.Header>
         <Layout.Content>
-          <div className="container" style={{ maxWidth: 1200 }}>
+          <div className={pathname === '/admin' ? 'container wide' : 'container admin'}>
             <Outlet />
           </div>
         </Layout.Content>

@@ -8,7 +8,7 @@ const str = (extra = {}) => ({ type: 'string', ...extra });
 const int = (extra = {}) => ({ type: 'integer', ...extra });
 const num = (extra = {}) => ({ type: 'number', ...extra });
 const bool = (extra = {}) => ({ type: 'boolean', ...extra });
-const obj = (properties, required) => ({ type: 'object', properties, ...(required ? { required } : {}) });
+const obj = (properties, required, extra = {}) => ({ type: 'object', properties, ...(required && required.length ? { required } : {}), ...extra });
 const arr = (items) => ({ type: 'array', items });
 const json = (schema, example) => ({ 'application/json': { schema, ...(example ? { example } : {}) } });
 const data = (schema) => obj({ data: schema });
@@ -312,7 +312,7 @@ const paths = {
   '/admin/members/{id}/tier-history': { get: op({ tag: 'Admin — Pengguna', summary: 'Riwayat perubahan tier member', auth: 'admin', params: [idParam()], schema: data(arr(obj({ id: str(), dari_tier_id: str({ nullable: true }), ke_tier_id: str({ nullable: true }), dari: str({ nullable: true }), ke: str({ nullable: true }), sebab: str({ enum: ['otomatis', 'manual'] }), alasan: str({ nullable: true }), admin_nama: str({ nullable: true }), created_at: str({ format: 'date-time' }) }))) }) },
 
   // --------------------------------------------------------- Admin: Dashboard (metrics, log integrasi, export)
-  '/admin/metrics': { get: op({ tag: 'Admin — Dashboard', summary: 'Metrik dasar: member aktif, poin beredar, redemption rate, top reward, sebaran tier (Admin Dashboard poin 6)', auth: 'admin', schema: data(ref('Metrics')) }) },
+  '/admin/metrics': { get: op({ tag: 'Admin — Dashboard', summary: 'Metrik dasar + kartu ringkasan per domain (member, struk/invoice, point rules, reward, voucher) untuk Admin Dashboard', auth: 'admin', schema: data(ref('Metrics')) }) },
   '/admin/integration-logs': { get: op({ tag: 'Admin — Dashboard', summary: 'Log request integrasi More (audit & troubleshooting)', auth: 'admin', params: [...pagingParams, q('endpoint', 'Filter endpoint, mis. `/transaction`')], schema: page(ref('IntegrationLog')) }) },
   '/admin/export/members.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export member ke CSV', security: [{ bearerAuth: [] }], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403) } } },
   '/admin/export/redeems.csv': { get: { tags: ['Admin — Dashboard'], summary: 'Export redeem ke CSV', security: [{ bearerAuth: [] }], responses: { 200: { description: 'File CSV', content: { 'text/csv': { schema: str() } } }, ...errs(401, 403) } } },
@@ -427,7 +427,20 @@ const schemas = {
   Voucher: obj({ id: str(), kode: str({ example: 'ALP-7K3QX9M2' }), member_id: str(), member_nama: str(), member_email: str({ nullable: true }), reward_id: str(), reward_nama: str(), redeem_id: str(), jumlah_poin: int({ nullable: true, description: 'Hanya pada detail voucher' }), status: str({ enum: ['active', 'reserved', 'used', 'expired', 'void'] }), status_efektif: str({ enum: ['active', 'reserved', 'used', 'expired', 'void'], description: 'Status setelah disesuaikan dengan waktu sekarang (voucher yang sudah lewat masa berlaku tampil `expired` walau scheduler belum sempat jalan)' }), issued_at: str({ format: 'date-time' }), expires_at: str({ format: 'date-time' }), reserved_until: str({ format: 'date-time', nullable: true }), used_at: str({ format: 'date-time', nullable: true }), used_order_id: str({ nullable: true }), void_reason: str({ nullable: true }), voided_oleh_nama: str({ nullable: true }), sumber: str({ enum: ['redeem', 'manual'] }), dibuat_oleh: str({ nullable: true }), dibuat_oleh_nama: str({ nullable: true }), catatan: str({ nullable: true }) }),
   VoucherSummary: obj({ total: int(), aktif: int(), dipesan: int({ description: 'Sedang dipakai di checkout More' }), terpakai: int(), kedaluwarsa: int(), dibatalkan: int(), manual: int(), akan_kedaluwarsa: int({ description: 'Voucher aktif yang habis dalam 7 hari ke depan' }) }),
   ChannelPointRule: obj({ channel: str(), rupiah_per_poin: int(), pembulatan: str({ enum: ['bawah', 'atas', 'terdekat'] }), minimal_transaksi: num(), updated_at: str({ format: 'date-time' }) }),
-  Metrics: obj({ member_total: int(), member_aktif: int(), poin_beredar: int(), redemption_rate: int({ description: 'Persen' }), top_reward: arr(obj({ nama: str(), jumlah: int() })), tier: arr(obj({ nama: str(), jumlah_member: int() })), voucher: { type: 'object', additionalProperties: int() } }),
+  Metrics: obj({
+    member_total: int(),
+    member_aktif: int(),
+    poin_beredar: int(),
+    redemption_rate: int({ description: 'Persen' }),
+    member: obj({ total: int(), aktif: int(), nonaktif: int(), baru_bulan: int({ description: 'Member daftar 30 hari terakhir' }), tier: arr(obj({ nama: str(), jumlah_member: int() })) }, ['total', 'aktif'], { description: 'Kartu member' }),
+    struk: obj({ total: int(), menunggu_review: int(), disetujui: int(), ditolak: int(), disetujui_bulan: int(), ditolak_bulan: int() }, ['total', 'menunggu_review'], { description: 'Kartu invoice/struk: antrean review dan keputusan 30 hari terakhir' }),
+    point_rule: obj({ rupiah_per_poin: int(), pembulatan: str({ enum: ['bawah', 'atas', 'terdekat'] }), minimal_transaksi: num(), channel: int({ description: 'Jumlah aturan poin per channel' }) }, [], { description: 'Kartu point rules' }),
+    poin_bulan: obj({ masuk: int(), keluar: int() }, ['masuk', 'keluar'], { description: 'Poin masuk/keluar 30 hari terakhir' }),
+    reward: obj({ total: int(), aktif: int(), stok_habis: int(), tanpa_batas: int(), tier_khusus: int(), berlaku_sampai: str({ format: 'date', nullable: true }) }, ['total', 'aktif'], { description: 'Kartu reward' }),
+    voucher: { type: 'object', description: 'Kartu voucher: jumlah per status (active/reserved/used/expired/void)', additionalProperties: int() },
+    top_reward: arr(obj({ nama: str(), jumlah: int() })),
+    tier: arr(obj({ nama: str(), jumlah_member: int() })),
+  }),
   IntegrationLog: obj({ id: str(), integrasi: str(), arah: str({ enum: ['masuk', 'keluar'] }), endpoint: str(), request_id: str({ nullable: true }), status_kode: int({ nullable: true }), payload: { type: 'object' }, hasil: { type: 'object' }, error: str({ nullable: true }), created_at: str({ format: 'date-time' }) }),
   AuditLog: obj({ id: str(), pelaku_tipe: str({ enum: ['admin', 'member', 'sistem'] }), pelaku_id: str({ nullable: true }), pelaku_nama: str({ nullable: true }), aksi: str({ example: 'struk.setujui' }), objek_tipe: str(), objek_id: str({ nullable: true }), detail: { type: 'object' }, created_at: str({ format: 'date-time' }) }),
 };

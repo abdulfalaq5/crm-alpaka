@@ -149,6 +149,19 @@ Implementasikan token di atas sebagai CSS variables di root, agar mudah disesuai
 
 1. Halaman list log: pelaku, aksi, objek, waktu — read-only, tanpa opsi edit/hapus dari UI (ADM-05, BR-12, NFR-06).
 
+### B7. Dashboard Admin (tambahan.md poin 6)
+
+1. Satu layar ringkasan dengan **metrik dasar** (member aktif, poin beredar, struk menunggu review, redemption rate) di strip atas.
+2. Satu kartu per domain, semuanya dari `GET /admin/metrics` (tanpa perhitungan ulang di frontend):
+   - **Member** — total/aktif/nonaktif/daftar 30 hari + sebaran tier (bar).
+   - **Invoice (struk)** — total struk, menunggu review, disetujui, ditolak, plus keputusan 30 hari terakhir.
+   - **Point rules** — rupiah per poin, pembulatan, minimal transaksi, jumlah aturan channel.
+   - **Reward** — total, aktif, stok habis, khusus tier, masa berlaku terdekat.
+   - **Voucher** — jumlah per status (active/reserved/used/expired/void).
+   - **Performa** — reward terlaris (redeem selesai) + poin keluar 30 hari.
+3. Setiap kartu punya tautan ke halaman pengelolaan terkait (`/admin/member`, `/admin/struk`, `/admin/pengaturan`, `/admin/reward`, `/admin/voucher`, `/admin/redeem`) dan tombol export CSV (member/struk/redeem).
+4. Gaya mengikuti language visual Dashboard member (panel putih, kicker uppercase, sudut tajam); halaman `/admin` memakai container lebar, halaman admin lain tetap 1200 px.
+
 ---
 
 ## Komponen UI Bersama (dipakai di Member Portal & Admin Panel)

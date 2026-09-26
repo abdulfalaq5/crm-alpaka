@@ -330,6 +330,19 @@ await call('PATCH', `/admin/members/${ani.id}`, { token: ADM, json: { status_aku
 r = await call('POST', '/auth/login', { json: { identifier: 'ani@test.com', password: 'passwordbaru1' } });
 check('member diaktifkan kembali', r.status === 200);
 
+// dashboard admin: metrik dasar + satu kartu per domain (member, struk, poin, reward, voucher)
+r = await call('GET', '/admin/metrics', { token: ADM });
+const mx = r.body.data || {};
+check('metrics: metrik dasar', r.status === 200 && mx.member_total > 0 && typeof mx.poin_beredar === 'number' && typeof mx.redemption_rate === 'number', JSON.stringify(mx));
+check('metrics: kartu member', mx.member && mx.member.total >= mx.member.aktif && Array.isArray(mx.member.tier));
+check('metrics: kartu struk (invoice)', mx.struk && ['total', 'menunggu_review', 'disetujui', 'ditolak', 'disetujui_bulan'].every((k) => typeof mx.struk[k] === 'number'), JSON.stringify(mx.struk));
+check('metrics: kartu point rules', mx.point_rule && mx.point_rule.rupiah_per_poin === 5000 && typeof mx.point_rule.channel === 'number', JSON.stringify(mx.point_rule));
+check('metrics: kartu reward', mx.reward && ['total', 'aktif', 'stok_habis'].every((k) => typeof mx.reward[k] === 'number'), JSON.stringify(mx.reward));
+check('metrics: kartu voucher', mx.voucher && ['active', 'reserved', 'used', 'expired', 'void'].every((k) => typeof mx.voucher[k] === 'number'), JSON.stringify(mx.voucher));
+check('metrics: poin 30 hari & top reward', mx.poin_bulan && Array.isArray(mx.top_reward));
+r = await call('GET', '/admin/metrics', { token: A });
+check('member tidak bisa buka metrics admin (403)', r.status === 403);
+
 // gambar reward (OI-09)
 const imgForm = (buf, name, type) => { const f = new FormData(); f.append('image', new Blob([buf], { type }), name); return f; };
 r = await call('POST', `/admin/rewards/${rw.id}/image`, { token: ADM, form: imgForm(PNG, 'r.png', 'image/png') });

@@ -44,6 +44,7 @@ h1, h2, h3, .section-label { letter-spacing: -0.01em; }
 
 .container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
 .container.wide { max-width: 1320px; }
+.container.admin { max-width: 1200px; }
 @media (min-width: 768px) { .container { padding: 40px 32px 64px; } }
 
 .card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 20px; }
@@ -188,6 +189,32 @@ button.linklike { background: none; border: 0; padding: 0; font: inherit; color:
 .section-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .section-head h2 { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.2; }
 @media (min-width: 768px) { .section-head h2 { font-size: 25px; } }
+
+/* --- Dashboard admin: metrik dasar + satu kartu per domain --- */
+.dash.dense > * + * { margin-top: 26px; }
+.metric-strip { display: grid; gap: 16px; }
+@media (min-width: 640px) { .metric-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .metric-strip { grid-template-columns: repeat(4, 1fr); } }
+.metric { border: 1px solid var(--color-border); background: var(--color-surface); padding: 20px 22px; }
+.metric .kicker { margin: 0 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.17em; color: var(--color-text-secondary); }
+.metric .value { margin: 0; font-size: 30px; font-weight: 600; line-height: 1.1; }
+.metric .sub { margin: 6px 0 0; font-size: 12px; color: var(--color-text-secondary); }
+
+.adash-grid { display: grid; gap: 16px; }
+@media (min-width: 768px) { .adash-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1280px) { .adash-grid { grid-template-columns: repeat(3, 1fr); } }
+.adash-grid .panel { display: flex; flex-direction: column; }
+.adash-grid .panel .panel-body { flex: 1; }
+.adash-grid .panel .foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--color-line); }
+.adash-grid .panel-body.foot { margin-top: 16px; }
+
+.mini-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--color-line); font-size: 13px; }
+.mini-row:last-of-type { border-bottom: 0; }
+.mini-row b { font-weight: 600; }
+.mini-row b.warn { color: var(--color-warning); }
+.tier-bars { display: grid; gap: 12px; margin-top: 18px; }
+.tier-bars .bar-note { margin-top: 0 0 6px; }
+.tier-bars .bar-note b { font-weight: 600; color: var(--color-text-primary); }
 
 /* --- Kartu hadiah (katalog ringkas) --- */
 .gift-grid { display: grid; gap: 16px; }
